@@ -42,7 +42,8 @@ accounts, or hosted control plane is built.
 | Chiron | Lower third, 1920×135, vertical roll, 4 stat groups per turn, 9s hold |
 | Match-info rail | Right 21%: facecam, then a 12-player split-flap board |
 | Facecam | 16:9 at full rail width, top of rail, optional |
-| Logo bay | Dedicated 3D well at the chiron's left end |
+| Logo bay | 211×135 noir well at the chiron's left end, carrying Valve's layered logo in bone |
+| Transitions | Logo sweep for live boundaries, eye ident for match end, hard cut otherwise |
 | Stat registry | ~35 stats across four availability tiers, selected by salience |
 | State machine | `IDLE → QUEUE → MATCH → RECAP`, fully automatic |
 | Caching proxy | Single Node process, one `/state` route |
@@ -199,7 +200,29 @@ process rather than a browser source that may be open twice.
   composites the overlay over *live* capture, a demo-derived scoreboard would trail the action
   viewers just watched by half a minute, while duplicating the game's own HUD.
 
-### 3.8 Twitch overlay convention
+### 3.8 The logo is a first-party layered SVG
+
+`/v1/assets/images` exposes Valve's own logo files under `main_menu/`, as **vector, in separate
+layers**:
+
+| File | Paths | Role |
+|---|---|---|
+| `deadlock_logo_outer.svg` | 4 | Outer ring |
+| `deadlock_logo_inner_noeye.svg` | 9 | Inner form, eye removed |
+| `deadlock_logo_eye.svg` | 1 | The eye alone |
+| `deadlock_logo_inner.svg` | 10 | Inner form *with* eye — unused; we composite instead |
+
+Base URL `https://assets-bucket.deadlock-api.com/assets-api-res/images/main_menu/`, verified
+`200` with `access-control-allow-origin: *` on each. All are `viewBox="0 0 100 100"`, every path
+is `fill="white"`, and there are **no groups, clip paths or strokes** — so each layer recolours
+with a single `currentColor` and animates independently.
+
+This supersedes an earlier plan to draw a custom mark, and it is better on every axis: vector
+rather than raster (exact at 211px and at 16px, ~15KB total), layered, first-party, stable, and
+the file the game itself ships rather than a re-trace. **The separated eye layer is what makes
+the transitions nearly free** (§6.5).
+
+### 3.9 Twitch overlay convention
 
 The standard is a web page loaded as an OBS **Browser Source** at 1920×1080 with a transparent
 background, layered over game capture. No plugin, no Twitch Extension, no Twitch API. Source
@@ -305,6 +328,11 @@ and adds a failure mode.
 --souls:          #FFED79;
 --chiron-hold:    9s;
 --chiron-groups:  4;
+--mark-color:     #FFEFD7;  /* bone — see §6.4 */
+--mark-rev:       90s;      /* 4°/s, below perception */
+--mark-blink:     10s;
+--xition-sweep:   1.1s;
+--xition-ident:   1.9s;
 ```
 
 ---
@@ -432,7 +460,7 @@ cell size, per §5.3.
 
 ---
 
-## 6. Component: chiron
+## 6. Component: chiron, logo bay and transitions
 
 ### 6.1 Form
 
@@ -486,6 +514,74 @@ Four groups across ~1455px of content width gives each ~**360px**. Generous for 
 `vs HAZE 11–4 LIFETIME`. Values therefore get a budget analogous to the board's cells: a headline
 value, an optional small unit, and an optional sub-line. Longer content abbreviates or splits
 across two groups.
+
+### 6.4 Logo bay
+
+A 211 × 135px well at the chiron's left end, walled off by the amber rule, with its own noir
+ground: a single hard key light from upper-left, deep falloff, and a vignette.
+
+**The mark is Valve's logo, composited from the three layers in §3.8** — `outer`,
+`inner_noeye`, `eye` — stacked and recoloured to a single bone `#FFEFD7`. **Symbol only; no
+wordmark.**
+
+**Bone, not black.** Measured against the bay at three sample points:
+
+| Mark | vs unlit `#090703` | vs mid `#15110A` | vs lit corner `#3A342B` |
+|---|---|---|---|
+| **bone `#FFEFD7`** | **17.81:1** | **16.64:1** | **10.89:1** |
+| near-black `#090703` | 1.00:1 | 1.07:1 | 1.64:1 |
+| pure black `#000000` | 1.04:1 | 1.12:1 | 1.71:1 |
+
+3:1 is the floor for a large graphic; black does not reach 2:1 anywhere in the bay. Black would
+require a light bay, and this one is noir by design.
+
+**Ambient motion:**
+
+- **Rotation** — the `outer` layer turns continuously, **90s per revolution = 4°/s**. Chosen
+  deliberately below the ~5°/s threshold at which drift is consciously registered as motion, so
+  it reads as the mark being alive rather than animated. This matters because the same objection
+  that killed the horizontal marquee (§6.1) applies to a spinning logo: it is on screen for every
+  second of every broadcast. At 30s (12°/s) it becomes visible drift; at 7s (51°/s) it is a
+  spinner and should not ship.
+- **Blink** — the `eye` layer scales to `scaleY(.06)` for ~120ms every **10s**. Intermittent
+  rather than continuous, so it is in motion under **1.2% of the time** and never establishes the
+  steady movement that pulls focus. Below ~4s it reads as nervous.
+
+**One consequence worth naming:** this is Valve's mark, so a viewer reads it as *Deadlock*, not as
+*DSN*. For a single-operator stream about Deadlock that is normal and expected. The DSN network
+conceit is carried by the chiron's structure and spine rather than by a wordmark.
+
+### 6.5 Transitions
+
+Only **two** are needed, because there are only two kinds of boundary: one where gameplay is live
+and must stay visible, and one where it is not. Both reuse the logo layers, so neither requires
+new art.
+
+| Boundary | Transition | Duration | Occludes |
+|---|---|---|---|
+| `QUEUE → MATCH` | **Logo sweep** | 1.1s | nothing |
+| `MATCH → RECAP` | **Eye ident** | 1.9s | everything |
+| `RECAP → IDLE/QUEUE` | **Eye ident** | 1.9s | everything |
+| Chiron turn change | Vertical roll (§6.1) | 0.5s | nothing |
+| Board stat change | Flap cascade (§5.3) | ~1.1s | nothing |
+| Any value update | **Hard cut** | 0 | nothing |
+
+**Logo sweep.** The `outer` ring turns 180° on an ease while the chiron's stat groups roll out and
+back behind it. Nothing but the chiron moves, so it is safe over live play — which is the whole
+requirement at a match start.
+
+**Eye ident.** The mark lifts out of the bay, grows to ~4× centre-frame while turning ~200°, the
+`eye` layer shuts, a near-black veil peaks for the state swap, then it reopens and recedes. Three
+CSS animations on layers Valve already separated. Full occlusion is acceptable here and only here:
+at match end the player is on a scoreboard or death screen, so there is no live gameplay to hide.
+
+**Hard cut is the default** and is correct for anything frequent. A transition on a changing number
+is noise.
+
+**Rejected:** the deco wipe (the eye ident does the same job and carries the brand, and two devices
+for one role is clutter) and the flap cascade as a *whole-screen* transition (it competes with the
+eye ident for the match-end slot; two signatures is one too many — it remains the board's own
+mechanism for stat changes).
 
 ---
 
@@ -641,17 +737,16 @@ A real network does not caption which feed failed.
 
 ## 11. Open decisions
 
-None block implementation; all are leaf-level.
+One leaf decision and one day-one verification. Neither blocks implementation.
 
-1. **3D logo treatment** for the chiron bay — not yet designed. Placeholder is extruded Reaver.
-2. **Transitions** — parked at operator's request. Four candidates built and demonstrated: deco
-   wipe (cheapest, most generic), flap cascade (most distinctive, would extend the board's language
-   to the whole screen), brass iris and logo sting (both fully occlude the frame, so restricted to
-   true breaks). Hard cut remains the free baseline and is correct for small in-state updates.
-   Recommendation is three total, not five.
-3. **Palette source** — citadel chrome pair (`#D4860B`/`#4D75C3`) vs brighter generic-data pair
-   (`#E7B659`/`#5B79E6`). Leaning brighter for stream compression.
-4. **Team index → colour** — verify `Team0` = Amber against one real match on day one (§4.2).
+1. **Palette source** — citadel chrome pair (`#D4860B`/`#4D75C3`) vs brighter generic-data pair
+   (`#E7B659`/`#5B79E6`). Leaning brighter for stream compression. Note this shrank in importance
+   once the net-worth bar was cut (§5.5): team colour now appears only on the two faction bands
+   and the operator's row highlight, so it is a smaller call than it was.
+2. **Team index → colour** — verify `Team0` = Amber against one real match on day one (§4.2). Not
+   a design decision; a fact to confirm.
+
+Resolved since the first draft: the logo (§6.4) and the transitions (§6.5).
 
 ---
 
@@ -684,6 +779,14 @@ Recorded with reasons so they are not relitigated.
 | Runtime token/font fetch | Adds a failure mode for data that changes per patch, not per match |
 | "LAST 10" as the column name | FORM is the broadcast idiom; the colliding chiron theme was renamed instead. The rename also freed the sample to be 11 and fill the board |
 | A 10-result FORM sample in 11 cells | Left one permanently dead cell; nothing required the sample to be ten |
+| A custom-drawn DSN mark | Four bevelled-brass and four flat-graphic directions were built and discarded. Valve ships a layered vector of the same idea (§3.8); drawing our own was work in service of nothing |
+| A re-uploaded logo PNG | Raster, third-party hosting, unlayered, and potentially a re-trace. The assets API serves the real vector |
+| Black mark in the bay | 1.0–1.7:1 contrast against a noir ground; below even the 3:1 floor for large graphics (§6.4) |
+| DSN wordmark in the bay | Operator chose symbol-only. The network conceit is carried by the chiron's structure and spine |
+| Rotation at 30s or faster | 12°/s and up reads as visible drift or outright spinning — the same permanent-distraction objection that killed the marquee |
+| Deco wipe transition | The eye ident does the same job and carries the brand; two devices for one role is clutter |
+| Flap cascade as a whole-screen transition | Competes with the eye ident for the match-end slot. Retained as the board's own stat-change mechanism |
+| Brass iris / logo sting (early concepts) | Both superseded: the real logo *is* an eye in a ring, so the ident does this natively |
 
 ---
 
@@ -695,10 +798,15 @@ Suggested phasing, each independently verifiable:
 
 1. Proxy skeleton + `deadlock.js` + recorded fixtures + `/state` returning a fixture
 2. `derive.js` against fixtures (TDD) — the free tier
-3. Overlay shell, layout regions, tokens, vendored fonts
+3. Overlay shell, layout regions, tokens, vendored fonts and logo layers
 4. `flap.js` + roster board + name auto-fit, driven from fixture JSON
 5. Chiron: spine, rolling groups, persistent zone, themes
-6. `registry.js` + salience
-7. State machine + live detection against a real match
-8. Failure-mode pass against §9
-9. Logo and transitions (open decisions resolved)
+6. Logo bay — composite the three layers, bone, ambient rotation and blink (§6.4)
+7. `registry.js` + salience
+8. State machine + live detection against a real match
+9. Transitions — logo sweep and eye ident, wired to state changes (§6.5)
+10. Failure-mode pass against §9
+
+Logo and transitions are no longer a trailing phase: the logo bay is static furniture needed as
+soon as the chiron exists (6), and the transitions are animations on it that only become
+meaningful once the state machine can fire them (9).
