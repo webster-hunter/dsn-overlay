@@ -39,9 +39,9 @@ accounts, or hosted control plane is built.
 | Element | Summary |
 |---|---|
 | Gameplay region | ~79% width × full height, game capture positioned behind the chrome |
-| Chiron | Lower third, 1920×135, vertical roll, 4 stat groups per turn |
-| Match-info rail | Right 21%: facecam, 12-player split-flap board, net-worth bar, session strip |
-| Facecam | 4:3 at full rail width, top of rail, optional |
+| Chiron | Lower third, 1920×135, vertical roll, 4 stat groups per turn, 9s hold |
+| Match-info rail | Right 21%: facecam, then a 12-player split-flap board |
+| Facecam | 16:9 at full rail width, top of rail, optional |
 | Logo bay | Dedicated 3D well at the chiron's left end |
 | Stat registry | ~35 stats across four availability tiers, selected by salience |
 | State machine | `IDLE → QUEUE → MATCH → RECAP`, fully automatic |
@@ -55,15 +55,15 @@ Each of these was considered and rejected for a stated reason; see §12.
 - Any control panel, WebSocket transport, or chat-command surface
 - Multi-tenancy, accounts, hosted deployment
 - A frontend framework or build step
-- Per-player low-priority / behaviour flags (not available — §3.6)
+- Per-player low-priority / behaviour flags (not available — §3.7)
+- A net-worth widget or session strip in the rail (both duplicate other surfaces — §5.5)
 
 ---
 
 ## 3. Research findings
 
-These were established by direct inspection of the live API and font binaries, not from
-documentation. They are recorded because several of them invalidate obvious-looking approaches,
-and rediscovering them is expensive.
+Established by direct inspection of the live API and font binaries, not from documentation.
+Recorded because several of them invalidate obvious-looking approaches.
 
 ### 3.1 API surface
 
@@ -71,15 +71,13 @@ and rediscovering them is expensive.
 - **CORS is fully open**: `access-control-allow-origin: *`, `access-control-expose-headers: *`.
   The browser *could* call the API directly. CORS is therefore **not** a reason to run a proxy.
 - Responses carry `Cache-Control: public, max-age=120, stale-while-revalidate=120` — the API's
-  own view of data granularity, and a useful default for our cache TTLs.
+  own view of data granularity, and a sensible default for our cache TTLs.
 
 ### 3.2 Design tokens are first-party and fetchable
 
-- `/v1/assets/colors` — **184 named colours**, extracted from Valve's own
+- `/v1/assets/colors` — **184 named colours** extracted from Valve's own
   `citadel_base_styles.css` Panorama declarations. Not a fan recreation.
 - `/v1/assets/fonts` — font tree on `assets-bucket.deadlock-api.com`, also `ACAO: *`.
-
-Key tokens:
 
 | Token | Hex | Role |
 |---|---|---|
@@ -94,14 +92,14 @@ Key tokens:
 
 **Two team palettes exist and disagree.** `/v1/assets/generic-data` carries `color_team1` =
 `#E7B659` and `color_team2` = `#5B79E6` — noticeably brighter, likely gameplay/minimap colours
-rather than UI chrome. Which to ship is an open decision (§11).
+rather than UI chrome. Which to ship is open (§11).
 
 ### 3.3 Fonts
 
 | Family | Glyphs | Use |
 |---|---|---|
-| `Radiance` (regular/semibold/bold + italics) | 674 / 624 mapped | All text |
-| `RadianceM` (regular/semibold/bold) | **12 total; 11 mapped — space + digits 0–9 only** | All numerics |
+| `Radiance` (regular/semibold/bold + italics) | 674 total, 624 mapped | All text |
+| `RadianceM` (regular/semibold/bold) | **12 total, 11 mapped — space + digits 0–9 only** | All numerics |
 | `Reaver` (regular/semibold/bold) | display | Faction names, chiron spine |
 
 `RadianceM` is Deadlock's dedicated tabular-numerals cut — the font the game uses for HUD
@@ -109,16 +107,43 @@ counters. Parsed from `radiancem-semibold.otf`: `unitsPerEm` 1000; digits `0`–
 1–10 with every advance exactly **569/1000 em**. Genuinely tabular, so digits sit dead-centre in
 a fixed grid.
 
-**Gotcha:** the space glyph (gid 11) is **600/1000 em** — 5.4% wider than a digit. RadianceM
-spaces therefore cannot be used for numeric alignment. This does not affect the roster board,
-whose blank positions are styled cells rather than space glyphs (§5.2), but it rules out
-space-padding any RadianceM string in the chiron.
-
 **Consequence worth exploiting:** because `RadianceM` contains *only* digits, the font stack
 `"RadianceM", "Radiance"` routes digits to the numeral font and letters to the UI font
 automatically. No per-character font logic is needed anywhere.
 
-### 3.4 Match detection and live roster
+**Gotcha:** the space glyph (gid 11) is **600/1000 em** — 5.4% wider than a digit. RadianceM
+spaces therefore cannot be used for numeric alignment. Harmless for the roster board, whose blank
+positions are styled cells rather than space glyphs (§5.3), but it rules out space-padding any
+RadianceM string in the chiron.
+
+### 3.4 Rank tiers
+
+From `/v1/assets/ranks` — **12 tiers, subranks 1–6** (always a single digit):
+
+| Tier | Name | Chars + subrank |
+|---|---|---|
+| 0 | Obscurus | 10 |
+| 1 | Initiate | 10 |
+| 2 | Seeker | 8 |
+| 3 | Acolyte | 9 |
+| 4 | Sentinel | 10 |
+| 5 | Mystic | 8 |
+| 6 | **Ritualist** | **11** |
+| 7 | Emissary | 10 |
+| 8 | Oracle | 8 |
+| 9 | Phantom | 9 |
+| 10 | **Ascendant** | **11** |
+| 11 | Eternus | 9 |
+
+**Archon, Alchemist and Arcanist are no longer Deadlock ranks** — they appear in older material
+and were used mistakenly in early mockups for this project. Do not reintroduce them.
+
+`Ritualist 6` and `Ascendant 6` are **11 characters**, which sets the board's cell count (§5.3).
+
+Each tier also carries its own `color` (Ascendant `#C39751`, Eternus `#E0C060`, …), used to tint
+the RANK column per tier.
+
+### 3.5 Match detection and live roster
 
 `/v1/matches/active` accepts `account_id` (SteamID3) and returns, per match:
 
@@ -127,27 +152,22 @@ automatically. No per-character font logic is needed anywhere.
 - `objectives_mask_team0`, `objectives_mask_team1`, `mid_boss`
 - `match_score`, `start_time`, `duration_s`, `spectators`, `match_mode_parsed`
 
-Rate limit **100 req/s**. This yields near-live team net worth and objective state with **no
-demo parser**.
+Rate limit **100 req/s**. This yields the roster and near-live team state with **no demo parser**.
+Only the roster is consumed; see §5.5 for why net worth is not rendered.
 
-**The limit that matters:** the endpoint is the in-game watch tab, capped at ~150–200
-concurrent matches globally and sorted by **average MMR, not popularity** — measured live, 93 of
-150 matches had zero spectators and the mix was 87 ranked / 63 unranked. So whether a given
-match appears depends on the operator's rank, not their viewership. Every feature depending on
-it must degrade gracefully (§8).
+**The limit that matters:** the endpoint is the in-game watch tab, capped at ~150–200 concurrent
+matches globally and sorted by **average MMR, not popularity** — measured live, 93 of 150 matches
+had zero spectators and the mix was 87 ranked / 63 unranked. So whether a given match appears
+depends on the operator's rank, not their viewership. Every dependent feature must degrade
+gracefully (§9).
 
-### 3.5 Per-player history
+### 3.6 Per-player history and batch endpoints
 
-`/v1/players/{account_id}/match-history` — **100 req/s** (the documented 10 req/h applies only
-to "bot friend" auth, not normal use). `PlayerMatchHistoryEntry` carries:
-
-`match_result`, `player_match_outcome`, `start_time`, `hero_id`, `player_kills/deaths/assists`,
-`net_worth`, `last_hits`, `denies`, `hero_level`, `match_duration_s`, `ranked_delta`,
-`ranked_display_badge`, `abandoned_time_s`, `team_abandoned`
-
-Everything in the "free" stat tier is derived from this single call per player.
-
-### 3.6 Batch endpoints, and the binding rate limit
+`/v1/players/{account_id}/match-history` — **100 req/s** (the documented 10 req/h applies only to
+"bot friend" auth). `PlayerMatchHistoryEntry` carries `match_result`, `player_match_outcome`,
+`start_time`, `hero_id`, `player_kills/deaths/assists`, `net_worth`, `last_hits`, `denies`,
+`hero_level`, `match_duration_s`, `ranked_delta`, `ranked_display_badge`, `abandoned_time_s`,
+`team_abandoned`. The entire "free" stat tier derives from this one call per player.
 
 | Endpoint | Batching | IP limit |
 |---|---|---|
@@ -159,9 +179,9 @@ Everything in the "free" stat tier is derived from this single call per player.
 | `/v1/matches/{id}/metadata` | no | generous |
 | `/v1/commands/resolve` | many vars per call | 60 req/60s |
 
-**Batch rank at 20/min is the project's rate ceiling.** Safe when fetched once per match
-(the roster is immutable after start); fatal if polled. This is the single strongest reason the
-cache lives in one process rather than in a browser source that may be open twice.
+**Batch rank at 20/min is the project's rate ceiling.** Safe fetched once per match (the roster is
+immutable after start); fatal if polled. This is the strongest reason the cache lives in one
+process rather than a browser source that may be open twice.
 
 ### 3.7 Dead ends — confirmed, do not revisit
 
@@ -171,13 +191,13 @@ cache lives in one process rather than in a browser source that may be open twic
 - **No per-player low-priority or behaviour data exists.** `is_low_pri_pool` appears only as a
   *filter on matches* in analytics endpoints; `match_player.low_pri_pool` is a match-level column
   reachable only via deprecated SQL or ~240 per-match `metadata` calls to cover 12 players'
-  recent history. A scan of all 126 endpoints and every component schema found no `behaviour`,
-  `trust`, `conduct`, `report`, or `priority` field on a player. Statlocker sources this elsewhere.
+  recent history. A scan of all 126 paths and every component schema found no `behaviour`,
+  `trust`, `conduct`, `report`, or `priority` field on a player.
 - **Live telemetry costs more than it returns.** `/v1/matches/{match_id}/live/url` is **6 req/h
   per IP**, hands back a demofile broadcast URL requiring a C# (`demofile-net`) or Rust (`haste`)
   parser — not browser-reachable — and the demo takes ~30s to become available. Since OBS
   composites the overlay over *live* capture, a demo-derived scoreboard would trail the action
-  viewers just watched by half a minute, while duplicating data the game's own HUD already shows.
+  viewers just watched by half a minute, while duplicating the game's own HUD.
 
 ### 3.8 Twitch overlay convention
 
@@ -193,24 +213,22 @@ order in OBS determines z-order.
 
 ```
 ┌────────────────────────────────────────────┬──────────────┐
-│                                            │  FACECAM 4:3 │
+│                                            │ FACECAM 16:9 │
 │                                            ├──────────────┤
-│         GAMEPLAY  ~79% × full height       │  MATCH INFO  │
-│         (game capture behind chrome)       │  12 rows     │
-│                                            │  split-flap  │
-│                                            ├──────────────┤
-│                                            │  NET WORTH   │
-│                                            ├──────────────┤
-│                                            │  SESSION     │
+│                                            │  Match info  │
+│         GAMEPLAY  ~79% × full height       │        FORM  │
+│         (game capture behind chrome)       ├──────────────┤
+│                                            │ Hidden King  │
+│                                            │  6 rows      │
+│                                            │ Archmother   │
+│                                            │  6 rows      │
 ├──────┬─────────────────────────────────────┴──────────────┤
-│ LOGO │  CHIRON — spine + 4 stat groups + rank chip        │
+│ LOGO │  CHIRON — spine + 4 stat groups + persistent zone  │
 └──────┴────────────────────────────────────────────────────┘
 ```
 
 No top bar. The wordmark header from the first draft was dropped in favour of the logo bay,
-which returns ~56px of vertical game pixels.
-
-**Dimensions at 1920×1080:**
+returning ~56px of vertical game pixels.
 
 | Region | Size |
 |---|---|
@@ -218,10 +236,24 @@ which returns ~56px of vertical game pixels.
 | Chiron | 12.5% = 135px tall |
 | Logo bay | 11% of chiron width = 211px |
 | Gameplay | ~1517 × 945px |
-| Facecam | 403 × 302px (4:3) |
+| Facecam | 403 × 227px (16:9) |
 
-**Rail vertical budget:** 945 available − 302 facecam − 62 header/bands − 360 (12 rows × 30px)
-= **221px slack**, occupied by the net-worth bar and session strip.
+**Rail vertical budget** — this arithmetic is load-bearing and an earlier draft got it wrong by
+underestimating the header and bands at 62px:
+
+| Item | px |
+|---|---|
+| Rail height (1080 − 135 chiron) | 945 |
+| Facecam 16:9 | − 227 |
+| Board header (padding + eyebrow + header flaps + border) | − 54 |
+| Two faction bands | − 44 |
+| **Available for rows** | **620** |
+| 12 rows × 48px | − 576 |
+| **Slack** | **+44** |
+
+**The facecam is 16:9 because of this budget.** At 4:3 (302px) only 545px remains, and 12 rows at
+48px need 576 — a 31px overflow. 16:9 is also what modern webcams actually output; 4:3 was an
+arbitrary early choice. If a 4:3 cam is ever required, rows must drop to 45px.
 
 ### 4.2 Factions
 
@@ -233,7 +265,7 @@ names are a two-entry constant in our config.
 **Mapping is bound to colour, not to team index.** Valve's CSS names tokens `team1_color` /
 `team2_color` (1-indexed) while the API returns `Team0` / `Team1` and `net_worth_team_0`
 (0-indexed). Standard Valve convention makes `team1_color` the first team, i.e. `Team0` = Amber
-= Hidden King — but this is convention, not documentation. Binding faction to colour keeps a
+= Hidden King — but that is convention, not documentation. Binding faction to colour keeps a
 surprise to a one-line fix rather than a mislabelled broadcast. **Verify against one real match
 on day one.**
 
@@ -241,13 +273,15 @@ on day one.**
 
 | Role | Face | Size |
 |---|---|---|
-| Faction names, chiron spine | Reaver Bold | 8–15px |
-| Body, labels, player names | Radiance Semibold | 7–11px |
+| Faction names, chiron spine | Reaver Bold | 9–15px |
+| Player names | Radiance Semibold | **14px, auto-fit to 8px** |
+| Hero sub-line | Radiance Semibold | 9px |
+| Labels, eyebrows | Radiance Semibold | 7–9px |
 | All numerics | RadianceM Semibold | 9–23px |
 | Split-flap cells | `"RadianceM", "Radiance"` stack | 12px |
 
 Fonts are **vendored into the repo**, not loaded from Valve's CDN. The CDN is CORS-open and
-works, but a broadcast should not depend on a third-party bucket being up.
+works, but a broadcast should not depend on a third-party bucket.
 
 ### 4.4 Tokens
 
@@ -256,18 +290,21 @@ committed to the repo. Colours change per patch, not per match, so a runtime fet
 and adds a failure mode.
 
 ```css
---flap-seam:     1.2px;    /* absolute px — see §5.2 */
---flap-seam-op:  0.34;
---flap-cell:     15px × 20px;
---flap-type:     12px;
---flap-cells:    10;       /* value cells, constant */
---flap-head:     8;        /* header cells, constant */
---hidden-king:   #D4860B;
---archmother:    #4D75C3;
---base-text:     #FFEFD7;
---souls:         #FFED79;
---chiron-hold:   9s;
---chiron-groups: 4;
+--flap-seam:      1.2px;   /* absolute px — see §5.3 */
+--flap-seam-op:   0.34;
+--flap-cell:      15px × 20px;
+--flap-type:      12px;
+--flap-cells:     11;      /* value cells, constant */
+--flap-head:      8;       /* header cells, constant */
+--row-height:     48px;
+--name-size:      14px;    /* auto-fit floor 8px */
+--facecam-ratio:  16 / 9;
+--hidden-king:    #D4860B;
+--archmother:     #4D75C3;
+--base-text:      #FFEFD7;
+--souls:          #FFED79;
+--chiron-hold:    9s;
+--chiron-groups:  4;
 ```
 
 ---
@@ -279,39 +316,66 @@ and adds a failure mode.
 All **12 players** — both factions, operator included. The operator is pinned **first within
 their faction** (not sorted among it) with a 3px gold left rule, gold name, and a `YOU` tag.
 
-Including the operator was a deliberate change from an earlier 11-player design. It works
-cleanly because every shipping stat mode is **per-player**, not relational, so the operator's row
-needs no special-case data path. More usefully, it supplies a baseline: "41% season" or "2–7
-together" means little in isolation, but with the operator's own figure in the same column every
-row reads as better or worse than them at a glance.
+Including the operator works cleanly because every shipping stat mode is **per-player**, not
+relational, so the operator's row needs no special-case data path. More usefully it supplies a
+baseline: "41% season" means little in isolation, but with the operator's own figure in the same
+column every row reads as better or worse than them at a glance.
 
-Faction bands carry the name in Reaver plus that team's net worth.
+Faction bands carry the name in Reaver plus that team's net worth figure.
 
-### 5.2 Split-flap mechanism
+**Header block.** A small `Match info` eyebrow sits directly above the stat-name flaps, **both
+right-aligned** so they read as a stacked pair. The stat name is the column header for the value
+cells beneath, so it must share their right edge — left-aligning the pair would drag all twelve
+rows of data left with it and forfeit the right-hand scan column.
+
+### 5.2 Player names
+
+Steam allows 32 characters with no script restriction. Measured with `canvas.measureText` against
+the real Radiance face, against a **169px** name column (403 − 18 padding − 24 avatar − 16 gaps −
+176 cells):
+
+- 32 narrow or mixed-case Latin characters **fit** at 14px. The common worst case is not a problem.
+- **All-caps wide Latin** and **CJK** do not — every CJK glyph is full-width, so 32 characters is
+  ~32em and overflows any affordable column. Emoji behave the same way. Cyrillic sits between.
+
+**Auto-fit** handles the middle of the distribution: measure each name, step the font down toward
+**8px** until it fits, ellipsis only past that. Most names keep large type, awkward ones shrink,
+pathological ones clip. Truncation is unavoidable for part of the distribution; the goal is only
+that it degrades gracefully.
+
+A **hero sub-line** at 9px sits under each name, which the 48px row height affords.
+
+### 5.3 Split-flap mechanism
 
 Values render as a **Solari-style split-flap board**. Each cell spins through the charset to its
 target glyph; rows stagger down the board rather than flipping in unison.
 
-**Constant cell count — a hard rule.** 10 value cells, 8 header cells, built once at mount and
+**Constant cell count — a hard rule.** **11 value cells**, 8 header cells, built once at mount and
 never rebuilt. A physical departure board cannot grow extra flaps, and respecting that also
 removes DOM churn, layout reflow, and the bug class where a longer value shifts the rail width
 mid-broadcast.
 
-**Consequence:** 10 cells is a permanent budget for every present and future stat. A value
-needing 11 characters abbreviates or doesn't ship. This is the correct constraint — it is the
-discipline the physical metaphor imposes.
+**Why 11 and not 10.** `Ritualist 6` and `Ascendant 6` are 11 characters (§3.4). At ten cells,
+right-justified, the board would render `SCENDANT 6` on stream. Eleven costs 16px of name column
+and is exactly what the data requires. The rule says *constant*, not *ten*.
+
+**Why not 12 for headroom.** A twelfth cell costs another 16px of name width today to insure
+against a 10-letter tier Valve has not shipped. If one ever lands it is a one-line change.
+
+**Consequence:** 11 cells is a permanent budget for every present and future stat. A value needing
+12 characters abbreviates or doesn't ship. This is the discipline the physical metaphor imposes.
 
 **Right-justified.** Figures align by magnitude, the right edge becomes a clean scan column, and
 blank cells pool harmlessly at the left. Blanks get a darker unlit flap face so empty positions
 read as hardware rather than absence.
 
-**Seam position is in absolute pixels, not percent or em.** This was a real bug worth recording.
-At `top: 58%` of cell height, the seam held its *proportional* place as cells scaled (0.133em
-below optical centre at both 12×15/9px and 15×20/12px) — but the absolute gap grew 1.20px →
-1.60px, and at this scale the eye judges a 1–2px gap absolutely. The seam appeared to drop.
+**Seam position is in absolute pixels, not percent or em.** A real bug worth recording. At
+`top: 58%` of cell height the seam held its *proportional* place as cells scaled (0.133em below
+optical centre at both 12×15/9px and 15×20/12px) — but the absolute gap grew 1.20px → 1.60px, and
+at this scale the eye judges a 1–2px gap absolutely, so the seam appeared to drop.
 `calc(50% + var(--flap-seam))` with the variable in px pins it to a constant visual offset at any
-cell size, and both background-gradient stops read the same variable so seam and value-step
-cannot drift apart.
+cell size, and both background-gradient stops read the same variable so seam and value-step cannot
+drift apart.
 
 **Legibility measures**, all four adopted:
 
@@ -323,22 +387,48 @@ cannot drift apart.
 4. W/L as a **filled field** — dark glyph on a green or red ground — rather than coloured text.
    A run of results then reads like a bar chart when scanning a column.
 
-**Rejected:** collapsing single-datum stats (SEASON, ABANDONS, RANK) into one wide block flap.
-It is the largest available legibility gain but violates the constant-count rule.
+**Cells are not enlarged beyond 15×20.** Every pixel of cell width costs 10× that in name column
+(11 cells plus margins), and player names are the scarcer resource. An earlier proposal to grow
+cells to 21×28 would have cut the name column from 185px to 119px.
 
-### 5.3 Stat modes
+### 5.4 Stat modes
 
-Auto-cycling: **LAST 10 · SEASON · ABANDONS · RANK**, extensible from the free tier (§6.2).
+Auto-cycling: **FORM · SEASON · ABANDONS · RANK**, extensible from the free tier (§7).
 
-**Abandons are presented as a neutral count** (`4/20`), amber-tinted at 3 or more. No risk icon,
-no "likely abandoner" label. The underlying field cannot distinguish a rage-quit from a dropped
-connection, and a named accusation on a live broadcast asserts intent the data does not carry.
-The count is a stat among stats; the viewer draws their own conclusion.
+- **FORM** — the **last eleven results** as W/L filled cells, filling the board exactly with no
+  blank. Named FORM after the broadcast idiom for a run of results. The chiron's turn theme of the
+  same name is therefore renamed **HERO** (§6.2), so one word means one thing across the overlay.
 
-### 5.4 Net worth and session strip
+  The sample is eleven *because* of the rename. "LAST 10" would have made an eleventh result a
+  lie, which is what forced a dead cell; FORM claims no count, so the sample can be whatever fills
+  the hardware — as on a real departure board, where every flap is lit. It costs nothing:
+  `match-history` returns hundreds of entries, and 11 against 10 is statistically immaterial.
 
-Net-worth differential as an Amber-vs-Sapphire split bar with absolute figures, from
-`/v1/matches/active`. Session strip: today's record, K/D, rank.
+  This yields a coherent rule for the whole board: **text-shaped stats fill all eleven cells
+  (FORM, RANK); number-shaped stats right-align with blanks to their left (SEASON, ABANDONS).**
+  Blanks are then always meaningful — they signal a figure, never a gap in the data.
+- **RANK** — cells tinted per tier using each tier's own `color` from `/v1/assets/ranks` (§3.4),
+  so the column reads as a colour gradient down the board before any word is parsed.
+- **ABANDONS** — presented as a neutral count (`4/20`), amber-tinted at 3 or more. No risk icon,
+  no "likely abandoner" label. The underlying field cannot distinguish a rage-quit from a dropped
+  connection, and a named accusation on a live broadcast asserts intent the data does not carry.
+
+### 5.5 What the rail deliberately does not contain
+
+Two widgets were designed, built, and cut as redundant.
+
+- **Net-worth differential bar.** Deadlock displays team souls in its own HUD at the top of the
+  screen. This repeated the same figures one section after this spec rejected live telemetry for
+  exactly that reason.
+- **Session strip** (today / K/D / rank). The chiron's Session turn already carries all three.
+
+The one property worth preserving was *persistence* — the chiron shows Session for 9s of a 45s
+cycle, so a viewer arriving mid-stream could wait 36s to see the operator's record. That argued
+for moving **today's record into the chiron's persistent zone** beside the rank (§6.1), where it
+is always visible at zero rail cost — not for a rail widget.
+
+Removing both freed vertical space, which was spent on **row height** (30px → 48px) rather than
+cell size, per §5.3.
 
 ---
 
@@ -350,7 +440,8 @@ Net-worth differential as an Amber-vs-Sapphire split bar with absolute figures, 
 
 Each group is a small uppercase label over a large value, optionally with a sub-line — stacked to
 use the full 135px height. A full-height **spine** at the left of the body carries the turn's
-theme word in Reaver.
+theme word in Reaver. A **persistent zone** at the right carries today's record and the rank
+badge with progress; neither rolls.
 
 **Horizontal marquee was rejected**, and not on taste. Measured throughput at readable speeds is
 *lower* than the roll (12.6 vs 26.7 stats/min), because a crawl must move slowly enough to read
@@ -358,16 +449,16 @@ and therefore spends most of its length showing content already read or not yet 
 decisive argument is that this sits in the lower third over a first-person shooter beside
 Deadlock's own HUD: constant horizontal motion is a permanent low-level distraction for every
 viewer for the whole broadcast, bought for no content gain. A crawl also cannot express priority,
-which makes the salience model (§7) meaningless.
+which makes the salience model (§7.1) meaningless.
 
 **The two settings compound rather than trade off.** Four groups at 9s yields 26.7 stats/min
 against 14.3 for one line at 4.2s — nearly double the throughput *with* a longer hold. And the
-chiron is motionless ~92% of the time, which is the figure that matters over live gameplay: it
-becomes a still graphic that quietly updates.
+chiron is motionless ~92% of the time, the figure that matters over live gameplay: it becomes a
+still graphic that quietly updates.
 
-Stacking also recovered the height. A single 15px line used roughly a third of 135px; an 8px
-label over a 23px value fills it, making the value type **50% larger** than the old single line
-while carrying four times the content.
+Stacking also recovered the height. A single 15px line used roughly a third of 135px; an 8px label
+over a 23px value fills it, making the value type **50% larger** than the old single line while
+carrying four times the content.
 
 **No split-flap in the chiron.** A 60-character line flapping per character is noise. Split-flap
 is reserved for the rail board, where cells are short numerics and the mechanism reads as
@@ -375,23 +466,26 @@ mechanical rather than chaotic. The rank chip is plain Radiance.
 
 ### 6.2 Turn themes
 
-Five themed turns, 9s each — a 45s cycle, ordinary television pacing. Thematic grouping (rather
-than shuffling) gives each turn a headline for the spine and lets the eye learn where to look.
+Five themed turns, 9s each — a 45s cycle, ordinary television pacing. Thematic grouping gives each
+turn a headline for the spine and lets the eye learn where to look.
 
 | Spine | Groups |
 |---|---|
 | **Session** | Today's record · K/D · souls per min · matches played |
-| **Form** | Hero · win rate + sample · delta vs global · lane win rate |
+| **Hero** | Hero · win rate + sample · delta vs global · lane win rate |
 | **Standing** | Rank + progress · percentile · regional place · rank delta trend |
 | **Matchup** | Opposing hero · lifetime record · counter win rate · lane pace |
 | **Records** | Current streak · season best · highest kills · milestone watch |
 
+This turn was called *Form* in earlier drafts and is renamed **Hero** so that FORM means only one
+thing in the overlay (§5.4). Its spine sub-label already read "Hero".
+
 ### 6.3 Value budget
 
 Four groups across ~1455px of content width gives each ~**360px**. Generous for `9–3`, tight for
-`vs HAZE 11–4 LIFETIME`. Values therefore get a budget analogous to the board's ten cells: a
-headline value, an optional small unit, and an optional sub-line. Longer content abbreviates or
-splits across two groups.
+`vs HAZE 11–4 LIFETIME`. Values therefore get a budget analogous to the board's cells: a headline
+value, an optional small unit, and an optional sub-line. Longer content abbreviates or splits
+across two groups.
 
 ---
 
@@ -411,7 +505,7 @@ anyway, and a dozen further stats fall out of the same payload for nothing.
 
 ### 7.1 Salience
 
-Taking all 35 stats is only tractable because selection is automated. **Tier membership means
+Taking all 35 stats is tractable only because selection is automated. **Tier membership means
 eligible to air, not always on screen.**
 
 Each stat declares three things:
@@ -423,8 +517,8 @@ Each stat declares three things:
 The chiron airs the highest-scoring turn; the stat pop-up draws from the same registry, so there
 is one content pipeline rather than two.
 
-A fixed rotation is wrong here: it gives "9–3 today" identical weight whether the operator is on
-a six-game heater or dead flat, where real broadcast leads with whatever is most unusual *now*.
+A fixed rotation is wrong here: it gives "9–3 today" identical weight whether the operator is on a
+six-game heater or dead flat, where real broadcast leads with whatever is most unusual *now*.
 
 **The sample floor is the important half.** "5–1 against this player" is the most tempting line
 available and the least trustworthy — six games is noise. The floor is what stops the overlay
@@ -458,16 +552,16 @@ Given open CORS, the proxy must justify itself on other grounds. In order of act
 
 1. **OBS reloads browser sources** on scene switches and restarts, more often than expected. A
    browser-only design re-fetches 12 match histories every reload; the proxy's cache survives
-   independently. This is the strongest reason, and it is operational rather than architectural.
+   independently. The strongest reason, and an operational rather than architectural one.
 2. **Batch rank is 20 req/min per IP.** One process owning that budget is safe; a browser source
    that might be open twice is not.
-3. **Composition belongs server-side** — the alternative puts retry, caching, and 15-call
-   orchestration inside the render layer.
+3. **Composition belongs server-side** — the alternative puts retry, caching, and orchestration
+   inside the render layer.
 4. **An API key, if added later for higher limits, cannot live in a browser source.**
 
-Note that CORS and payload size are *not* on this list. Payload matters only in the fallback
-path, where `mate-stats` returns a `matches[]` array of every match ID (measured: 383 rows ×
-~200 IDs). That array is stripped at the proxy and never reaches the browser.
+CORS and payload size are *not* on this list. Payload matters only in the fallback path, where
+`mate-stats` returns a `matches[]` array of every match ID (measured: 383 rows × ~200 IDs). That
+array is stripped at the proxy and never reaches the browser.
 
 ### 8.3 Fetch plan
 
@@ -490,14 +584,14 @@ Analytics context is cached for an hour; none of it changes mid-match.
 | Unit | Responsibility |
 |---|---|
 | `proxy/deadlock.js` | API client; knows endpoints and rate limits, nothing else |
-| `proxy/derive.js` | `match-history` → last-10, season record, abandons, streak, averages. **Pure.** |
+| `proxy/derive.js` | `match-history` → form, season record, abandons, streak, averages. **Pure.** |
 | `proxy/registry.js` | stat definitions: compute, min-sample, salience. **Pure.** |
 | `proxy/cache.js` | per-match and per-hour TTL stores |
 | `proxy/server.js` | one route, `/state` |
 | `overlay/state.js` | state machine. **Pure.** |
 | `overlay/flap.js` | fixed-cell split-flap driver; no knowledge of stats |
-| `overlay/board.js` | roster rail |
-| `overlay/chiron.js` | spine, rolling groups, rank chip |
+| `overlay/board.js` | roster rail, name auto-fit |
+| `overlay/chiron.js` | spine, rolling groups, persistent zone |
 | `overlay/tokens.css` | generated, committed |
 
 ### 8.5 State machine
@@ -505,10 +599,10 @@ Analytics context is cached for an hour; none of it changes mid-match.
 `IDLE → QUEUE → MATCH → RECAP → IDLE`
 
 Fully automatic, driven by `matches/active` detection and `start_time`/`duration_s`. No UI, no
-transport, nothing to touch mid-match. This was chosen over a control panel for a practical
-reason: the operator's hands are on WASD during play, and the OBS browser source is a *separate
-browser instance* from their desktop browser, so `BroadcastChannel` and `localStorage` cannot
-reach it — any control surface would require a real local WebSocket server.
+transport, nothing to touch mid-match. Chosen over a control panel for a practical reason: the
+operator's hands are on WASD during play, and the OBS browser source is a *separate browser
+instance* from their desktop browser, so `BroadcastChannel` and `localStorage` cannot reach it —
+any control surface would require a real local WebSocket server.
 
 ---
 
@@ -520,9 +614,9 @@ intentional. A spinner or empty panel on a broadcast is worse than slightly stal
 | Failure | Behaviour |
 |---|---|
 | Upstream API down | Proxy serves last-known-good from cache |
-| Match not in watch index | Board **silently swaps to season form** — the operator's most-played mates and all-season records, via `mate-stats` with `min_matches_played`. Viewer sees no gap and no "not live" label. Mode is visible in proxy logs only. |
-| Net worth / objectives unavailable | Bar hides; rail reflows into the slack |
+| Match not in watch index | Board **silently swaps to season form** — the operator's most-played mates and all-season records, via `mate-stats` with `min_matches_played`. Viewer sees no gap and no "not live" label. Mode visible in proxy logs only. |
 | Proxy down | Overlay freezes on last good state rather than blanking |
+| A name exceeds the column | Auto-fit to 8px, then ellipsis (§5.2) |
 | Fonts unreachable | Vendored locally, so this cannot occur; fallback stack regardless |
 | A stat below its sample floor | Never airs; next-highest salience takes the slot |
 
@@ -533,11 +627,13 @@ A real network does not caption which feed failed.
 ## 10. Testing
 
 - **`derive.js`, `registry.js`, `state.js` are pure** → table-driven tests against **recorded API
-  fixtures** saved to disk from live responses, rather than hand-written mocks. The response
-  shapes are fiddly enough that hand-rolled mocks would encode our misunderstandings.
+  fixtures** saved to disk from live responses, rather than hand-written mocks. The response shapes
+  are fiddly enough that hand-rolled mocks would encode our misunderstandings.
 - **`flap.js` needs its spin step count made deterministic** to be testable; it is currently
   randomised. Inject the step count.
-- **Visual layer** is driven from fixture JSON, so each state and failure mode can be rendered
+- **Name auto-fit** gets a test fixture of pathological Steam names — 32 wide caps, 32 CJK, emoji,
+  Cyrillic — asserting no overflow of the 169px column at any auto-fit size.
+- **Visual layer** is driven from fixture JSON, so every state and failure mode can be rendered
   and inspected without the game running.
 - TDD per `superpowers:test-driven-development` throughout.
 
@@ -549,10 +645,10 @@ None block implementation; all are leaf-level.
 
 1. **3D logo treatment** for the chiron bay — not yet designed. Placeholder is extruded Reaver.
 2. **Transitions** — parked at operator's request. Four candidates built and demonstrated: deco
-   wipe (cheapest, most generic), flap cascade (most distinctive, would extend the board's
-   language to the whole screen), brass iris and logo sting (both fully occlude the frame, so
-   restricted to true breaks). Hard cut remains the free baseline and is correct for small
-   in-state updates. Recommendation is three total, not five.
+   wipe (cheapest, most generic), flap cascade (most distinctive, would extend the board's language
+   to the whole screen), brass iris and logo sting (both fully occlude the frame, so restricted to
+   true breaks). Hard cut remains the free baseline and is correct for small in-state updates.
+   Recommendation is three total, not five.
 3. **Palette source** — citadel chrome pair (`#D4860B`/`#4D75C3`) vs brighter generic-data pair
    (`#E7B659`/`#5B79E6`). Leaning brighter for stream compression.
 4. **Team index → colour** — verify `Team0` = Amber against one real match on day one (§4.2).
@@ -576,9 +672,18 @@ Recorded with reasons so they are not relitigated.
 | Per-player low-priority flag | Not present in the API in any form (§3.7) |
 | Explicit "risk" flag on abandons | Asserts intent the field cannot distinguish; public accusation on a named player |
 | Block flap for single-datum stats | Largest legibility gain available, but breaks the constant-count rule |
+| 10 value cells | Clips `Ascendant 6` / `Ritualist 6` by one character |
+| 12 value cells | Costs 16px of name column against a tier length Valve hasn't shipped |
+| 21×28 cells | Would cut the name column from 185px to 119px; names are scarcer than cell size |
+| Net-worth bar in the rail | Deadlock's own HUD already shows team souls |
+| Session strip in the rail | Chiron's Session turn already carries it; persistence solved in the chiron instead |
+| Left-aligned board header | Stat name is the column header for right-justified values; must share their right edge |
+| 4:3 facecam | Leaves only 545px for rows; 12 × 48px needs 576px |
 | Horizontal marquee chiron | Lower measured throughput, constant motion over gameplay, cannot express priority |
 | Split-flap chiron ticker | A 60-character line flapping per character is noise |
 | Runtime token/font fetch | Adds a failure mode for data that changes per patch, not per match |
+| "LAST 10" as the column name | FORM is the broadcast idiom; the colliding chiron theme was renamed instead. The rename also freed the sample to be 11 and fill the board |
+| A 10-result FORM sample in 11 cells | Left one permanently dead cell; nothing required the sample to be ten |
 
 ---
 
@@ -591,8 +696,8 @@ Suggested phasing, each independently verifiable:
 1. Proxy skeleton + `deadlock.js` + recorded fixtures + `/state` returning a fixture
 2. `derive.js` against fixtures (TDD) — the free tier
 3. Overlay shell, layout regions, tokens, vendored fonts
-4. `flap.js` + roster board, driven from fixture JSON
-5. Chiron: spine, rolling groups, themes
+4. `flap.js` + roster board + name auto-fit, driven from fixture JSON
+5. Chiron: spine, rolling groups, persistent zone, themes
 6. `registry.js` + salience
 7. State machine + live detection against a real match
 8. Failure-mode pass against §9
