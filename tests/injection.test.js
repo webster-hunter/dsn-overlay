@@ -35,3 +35,27 @@ test('logo.js innerHTML is confined to locally vendored SVG', () => {
   assert.doesNotMatch(src, /api\.deadlock-api\.com|assets-bucket/,
     'logo.js must not fetch SVG from the network at runtime');
 });
+
+/**
+ * Chat adds the project's first URL sink: an <img src> next to text a stranger
+ * typed. Both URL builders must stay pinned to their CDN base and validate the
+ * id, so no part of a message can ever reach src — not as a scheme, not as a
+ * host, not as a path escape.
+ */
+test('emote URLs are built from a fixed base and a validated id', () => {
+  const src = readFileSync('overlay/emotes.js', 'utf8');
+  assert.doesNotMatch(src, /https?:\/\/\$\{/, 'a CDN host must never be interpolated');
+  for (const fn of ['twitchEmoteUrl', 'bttvEmoteUrl']) {
+    const body = src.match(new RegExp(`${fn} = [^;]+;`))?.[0];
+    assert.ok(body, `${fn} must exist`);
+    assert.match(body, /SAFE_ID\.test\(id\)/, `${fn} must validate the id before building a URL`);
+  }
+});
+
+test('chat.js sets img.src only from the emote URL builders', () => {
+  const src = readFileSync('overlay/chat.js', 'utf8');
+  for (const assign of src.match(/\.src\s*=\s*[^;]+;/g) ?? []) {
+    assert.match(assign, /part\.url/,
+      `img.src must come from tokenise(), not from a message: ${assign}`);
+  }
+});

@@ -22,6 +22,8 @@
  * gate greps this file for the usual sinks.
  */
 
+import { tokenise, parseBadges, badgeLabel, loadBttv } from './emotes.js';
+
 const IRC = 'wss://irc-ws.chat.twitch.tv:443';
 
 /** Anonymous read-only login. Twitch accepts any justinfan<digits> nick. */
@@ -102,18 +104,46 @@ export function mountChat(host, channel) {
   list.id = 'chat-lines';
   host.replaceChildren(list);
 
-  const add = (nick, text, colour) => {
+  let bttv = new Map();          // filled once the room id is known
+
+  const add = (nick, text, colour, tags = {}) => {
     const line = document.createElement('div');
     line.className = 'chat-line';
+
+    // Badges as our own chips. Twitch's images need an authenticated app —
+    // badges.twitch.tv no longer resolves and Helix is 401 — and drawn here
+    // they match the overlay instead of importing its purple.
+    for (const name of parseBadges(tags.badges)) {
+      const chip = document.createElement('span');
+      chip.className = 'chat-badge badge-' + name;
+      chip.textContent = badgeLabel(name);
+      line.appendChild(chip);
+    }
+
     const who = document.createElement('span');
     who.className = 'chat-nick';
     who.style.color = colour;
     who.textContent = nick;
+    line.appendChild(who);
+
     const what = document.createElement('span');
     what.className = 'chat-text';
-    // textContent: a viewer typing markup gets a literal string, not an element.
-    what.textContent = text;
-    line.append(who, what);
+    // Every text run is set via textContent; every image src is built from a
+    // fixed CDN base plus a validated id. No URL ever comes from the message.
+    for (const part of tokenise(text, tags.emotes, bttv)) {
+      if (part.kind === 'emote') {
+        const img = document.createElement('img');
+        img.className = 'chat-emote';
+        img.src = part.url;
+        img.alt = part.alt;
+        // A dead emote must not leave a broken-image glyph on the broadcast.
+        img.addEventListener('error', () => img.replaceWith(document.createTextNode(part.alt)));
+        what.appendChild(img);
+      } else {
+        what.appendChild(document.createTextNode(part.value));
+      }
+    }
+    line.appendChild(what);
     list.appendChild(line);
     while (list.children.length > MAX_LINES) list.firstChild.remove();
     // Newest at the bottom, as every chat client does.
@@ -130,7 +160,9 @@ export function mountChat(host, channel) {
       retry = 1000;
       // Tags carry display-name and colour; without the capability the
       // messages still arrive but render as flat lowercase logins.
-      socket.send('CAP REQ :twitch.tv/tags');
+      // tags carry display-name, colour, badges and emote ranges; commands is
+      // what makes Twitch send ROOMSTATE, whose room-id BTTV needs.
+      socket.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
       socket.send('PASS SCHMOOPIIE');            // anonymous: any value
       socket.send('NICK ' + anonNick());
       socket.send('JOIN #' + channel.toLowerCase());
@@ -142,9 +174,15 @@ export function mountChat(host, channel) {
         const msg = parseIrc(raw);
         // Twitch drops connections that do not answer its keepalive.
         if (msg.command === 'PING') { socket.send('PONG :tmi.twitch.tv'); continue; }
+        // ROOMSTATE arrives on join and carries the channel's numeric id —
+        // the one thing BTTV needs, with no extra lookup and no auth.
+        if (msg.command === 'ROOMSTATE' && msg.tags['room-id']) {
+          loadBttv(msg.tags['room-id']).then(m => { bttv = m; });
+          continue;
+        }
         if (msg.command !== 'PRIVMSG' || msg.text == null) continue;
         const nick = msg.tags['display-name'] || msg.nick || '?';
-        add(nick, msg.text, nameColour(msg.tags, nick));
+        add(nick, msg.text, nameColour(msg.tags, nick), msg.tags);
       }
     });
 

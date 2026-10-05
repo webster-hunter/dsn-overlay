@@ -51,3 +51,59 @@ test('markup typed by a viewer stays text, never a node', () => {
   assert.equal(m.text, evil);
   assert.equal(typeof m.text, 'string');
 });
+
+// --- emotes and badges ------------------------------------------------------
+import { parseEmoteTag, tokenise, parseBadges, badgeLabel, twitchEmoteUrl, bttvEmoteUrl } from '../overlay/emotes.js';
+
+test('emote ranges are indexed in code points, not UTF-16 units', () => {
+  // An emoji is two UTF-16 units but one code point. Indexing with charAt
+  // shifts every later range and slices the emote name in half.
+  const text = '👍 Kappa';           // Kappa occupies code points 2-6
+  const parts = tokenise(text, '25:2-6');
+  const emote = parts.find(p => p.kind === 'emote');
+  assert.ok(emote, 'the emote must be found despite the astral character');
+  assert.equal(emote.alt, 'Kappa');
+});
+
+test('a crafted emote id cannot inject a URL', () => {
+  // The id arrives in a tag; it must never be pasted into a URL unchecked.
+  for (const bad of ['../../evil', 'javascript:alert(1)', 'a/b', 'x".onerror="']) {
+    assert.equal(twitchEmoteUrl(bad), null, bad);
+    assert.equal(bttvEmoteUrl(bad), null, bad);
+  }
+  assert.equal(twitchEmoteUrl('25'), 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0');
+});
+
+test('BTTV emotes match whole words only', () => {
+  const bttv = new Map([['catJAM', 'abc123']]);
+  const whole = tokenise('wow catJAM nice', '', bttv);
+  assert.equal(whole.filter(p => p.kind === 'emote').length, 1);
+
+  // A substring inside a longer word is not that emote.
+  const partial = tokenise('wowcatJAMnice', '', bttv);
+  assert.equal(partial.filter(p => p.kind === 'emote').length, 0);
+});
+
+test('message text around emotes survives intact', () => {
+  const parts = tokenise('hi Kappa there', '25:3-7');
+  const text = parts.filter(p => p.kind === 'text').map(p => p.value).join('');
+  assert.ok(text.includes('hi'), 'leading text kept');
+  assert.ok(text.includes('there'), 'trailing text kept');
+});
+
+test('badges parse to names and get short labels', () => {
+  assert.deepEqual(parseBadges('broadcaster/1,subscriber/12,moderator/1'),
+                   ['broadcaster', 'subscriber', 'moderator']);
+  assert.equal(badgeLabel('broadcaster'), 'HOST');
+  assert.equal(badgeLabel('moderator'), 'MOD');
+  // An unknown badge still renders something rather than nothing.
+  assert.equal(badgeLabel('some_new_badge'), 'SOMEN');
+});
+
+test('a crafted badge name cannot become a class or label injection', () => {
+  // The name becomes a CSS class, so it must be constrained.
+  assert.deepEqual(parseBadges('evil badge/1'), []);
+  assert.deepEqual(parseBadges('"><script>/1'), []);
+  assert.deepEqual(parseBadges(''), []);
+  assert.deepEqual(parseBadges(undefined), []);
+});

@@ -10,13 +10,12 @@ split-flap stat board and a news-ticker chiron around your gameplay.
 ├───────────────────────────────────────────┬──────────────────┤
 │                                           │     facecam      │
 │                                           ├──────────────────┤
-│                                           │   MATCH INFO     │
-│            gameplay 1600 × 900            │       FORM       │
-│            (transparent, 16:9)            ├──────────────────┤
-│                                           │  HIDDEN KING     │
-│                                           │  ▸ hero icon +   │
-│                                           │  ARCHMOTHER      │
-│                                           │    11 flaps      │
+│                                           │ HOST you         │
+│            gameplay 1600 × 900            │   gl out there   │
+│            (transparent, 16:9)            │ MOD someone      │
+│                                           │   nice rotation  │
+│                                           │ viewer  [emote]  │
+│                                           │   twitch chat    │
 ├──────┬────────────────────────────────────┴──────────────────┤
 │ logo │  DEADLOCK · Session  TODAY  K/D  MATCHES  RANK        │
 └──────┴──────────────────────────────────────────────────────-┘
@@ -25,16 +24,14 @@ split-flap stat board and a news-ticker chiron around your gameplay.
 
 **The gameplay area is exactly 16:9.** 1920 − 320 = 1600 wide, 1080 − 45 − 135
 = 900 tall. That is deliberate: a 16:9 game capture fills it with no dead
-space. The rail is narrow enough that it carries no player names at all: each
-row is identified by its **hero icon**, which is how you recognise someone in
-the match anyway, and the reclaimed width went to the flap cells.
+space.
 
 **Five regions.** A thin bar across the top carries your name and tagline.
-Gameplay shows through a fully transparent area. The right
-rail carries an optional facecam above a Solari split-flap board listing all
-12 players by hero icon, cycling through four stats every 9 seconds. The chiron along the
-bottom rolls through five themed turns. A layered Deadlock mark sits in the
-chiron's left bay and turns one notch on each chiron turn.
+Gameplay shows through a fully transparent area. The right rail carries an
+optional facecam above **Twitch chat**, rendered in Deadlock's own type (see
+*Twitch chat* below). The chiron along the bottom rolls through five themed
+turns. A layered Deadlock mark sits in the chiron's left bay and turns one
+notch on each chiron turn.
 
 **Two transitions.** A logo *sweep* (1.1s) marks a match starting — it occludes
 nothing, so it is safe over live play. An *ident* (1.9s) covers the frame at
@@ -57,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 104 tests, no install step needed
+npm test          # 142 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -134,6 +131,48 @@ genuinely transparent and composites over whatever is beneath it.
 
 ---
 
+## Twitch chat
+
+Set `DSN_TWITCH_CHANNEL` and the right rail fills with your chat, drawn by this
+project rather than embedded from Twitch.
+
+**It is read-only by construction.** The overlay connects to Twitch's IRC
+gateway as an anonymous `justinfan` user — an account that cannot send, has no
+credentials, and could not post even if something tried to make it. There is no
+message box on screen and no token anywhere in the project.
+
+Twitch's own embed was tried first and is wrong for a broadcast: it ships a
+cookie-consent banner covering a third of the rail, an animated-emotes notice,
+and a "Send a message" box nobody will type into on stream. Its popout URL
+cannot be framed at all. Both were observed, not assumed.
+
+What renders:
+
+| | |
+|---|---|
+| **Emotes** | Twitch emotes from the `emotes` IRC tag, plus **BetterTTV** global and channel sets. Both CDNs are public; nothing needs an API key. |
+| **Badges** | Broadcaster, moderator, VIP and subscriber appear as `HOST` / `MOD` / `VIP` / `SUB` chips in the overlay's palette. |
+| **Names** | The chatter's own Twitch colour, or a warm deterministic one if they never picked a colour, so a given chatter keeps one colour all stream. |
+
+BTTV needs the channel's numeric Twitch id, which arrives for free in the
+`ROOMSTATE` tag on join — no lookup, no auth. If BTTV is down or the channel
+has no BTTV account, chat still renders; emotes are a nicety and messages are
+the point.
+
+**Badge *images* are deliberately not used.** They need an authenticated Twitch
+app: `badges.twitch.tv` no longer resolves and Helix returns 401 without a
+registered client. Drawing the chips here avoids the auth entirely and matches
+the overlay instead of importing Twitch purple.
+
+Chat is the most attacker-controlled input in the project — more so than Steam
+persona names, which at least require being in your match. Every message
+reaches the DOM through `createTextNode`, and every emote `src` is a fixed CDN
+base plus an id that must match `[A-Za-z0-9_-]{1,64}`, so no part of a message
+can reach a URL. `tests/injection.test.js` fails the build if either property
+is lost.
+
+---
+
 ## Usage
 
 Start the proxy before going live and leave it running. It polls for an active
@@ -178,7 +217,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-104 tests across 16 files, run by `node --test`. The quoted glob in the script
+142 tests across 19 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -189,7 +228,9 @@ Two suites are worth knowing about:
   persona names are attacker-controlled by every player in a match, so every
   API-sourced string reaches the DOM through `textContent`. The single
   permitted exception is `overlay/logo.js`, which injects three locally
-  vendored SVGs and has its own scoped test.
+  vendored SVGs and has its own scoped test. The same file guards the project's
+  only URL sink: both emote-URL builders must validate the id, and `chat.js`
+  may set `img.src` only from what `tokenise()` returned.
 - `tests/http.test.js` drives real requests against the server on an ephemeral
   port and asserts the process *survives* malformed input, not merely that it
   returns a 4xx.
@@ -254,6 +295,7 @@ Environment:
 | `DSN_ACCOUNT_ID` | `0` | your SteamID3 numeric part; required for live data. Set in `.env` (see `.env.example`) or the environment, which takes precedence. |
 | `DSN_STREAMER_NAME` | empty | shown in the top bar |
 | `DSN_STREAMER_TAGLINE` | empty | smaller line beside it — socials, schedule, anything |
+| `DSN_TWITCH_CHANNEL` | empty | the channel whose chat fills the right rail, read-only. Blank leaves a placeholder card. |
 | `PORT` | `7331` | |
 
 Tunables live in `proxy/config.js` — poll interval, cache TTLs, history

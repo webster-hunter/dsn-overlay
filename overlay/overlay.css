@@ -83,6 +83,21 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .chat-nick { font-family: "Radiance", system-ui, sans-serif; font-weight: 700; }
 .chat-nick::after { content: ""; display: inline-block; width: 6px; }
 .chat-text { color: #D8CDBA; }
+.chat-emote { height: 22px; vertical-align: -5px; margin: 0 1px; }
+.chat-badge {
+  display: inline-block; vertical-align: 1px; margin-right: 5px;
+  font-family: "Reaver", "Radiance", sans-serif; font-weight: 700;
+  font-size: 9px; letter-spacing: .09em; line-height: 1;
+  padding: 3px 4px; border-radius: 2px;
+  color: #17120A; background: #8A8071;
+}
+/* Drawn in the overlay palette: Twitch badge images need an authenticated app,
+   and its purple would fight this one anyway. */
+.chat-badge.badge-broadcaster { background: var(--color-gold); }
+.chat-badge.badge-moderator   { background: #719C47; }
+.chat-badge.badge-vip         { background: #B47FEB; }
+.chat-badge.badge-subscriber,
+.chat-badge.badge-founder     { background: var(--team-sapphire); color: #F2ECE0; }
 .chat-empty {
   height: 100%; display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 6px; padding: 0 18px; text-align: center;
