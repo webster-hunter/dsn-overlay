@@ -319,7 +319,6 @@ show a spinner, an error, or an empty region on a live broadcast.
 | `fixtures/` | recorded API samples that drive `?fixture` |
 | `scripts/` | one-shot generators for tokens, vendored assets and fixtures |
 | `tests/` | `node --test` suites |
-| `docs/superpowers/` | the design spec and implementation plan |
 
 ### Configuration
 
@@ -470,8 +469,7 @@ match, and the active-match feed is not guaranteed to report one.
 
 ## Design notes
 
-The spec and the implementation plan live in `docs/superpowers/`. One decision
-there is load-bearing and easy to undo by accident:
+One decision is load-bearing and easy to undo by accident:
 
 - **The cell font stack is `"RadianceM", "Radiance", ui-monospace, monospace`
   and every entry matters.** `RadianceM` is a digits-only subset with exact
