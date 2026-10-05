@@ -14,9 +14,9 @@ split-flap stat board and a news-ticker chiron around your gameplay.
 │            gameplay 1600 × 900            │       FORM       │
 │            (transparent, 16:9)            ├──────────────────┤
 │                                           │  HIDDEN KING     │
-│                                           │   ▸ 12 rows,     │
+│                                           │  ▸ hero icon +   │
 │                                           │  ARCHMOTHER      │
-│                                           │     11 flaps     │
+│                                           │    11 flaps      │
 ├──────┬────────────────────────────────────┴──────────────────┤
 │ logo │  DEADLOCK · Session  TODAY  K/D  MATCHES  RANK        │
 └──────┴──────────────────────────────────────────────────────-┘
@@ -25,13 +25,14 @@ split-flap stat board and a news-ticker chiron around your gameplay.
 
 **The gameplay area is exactly 16:9.** 1920 − 320 = 1600 wide, 1080 − 45 − 135
 = 900 tall. That is deliberate: a 16:9 game capture fills it with no dead
-space. The rail is narrow enough that long Steam names truncate — a conscious
-trade for the game filling its area.
+space. The rail is narrow enough that it carries no player names at all: each
+row is identified by its **hero icon**, which is how you recognise someone in
+the match anyway, and the reclaimed width went to the flap cells.
 
 **Five regions.** A thin bar across the top carries your name and tagline.
 Gameplay shows through a fully transparent area. The right
 rail carries an optional facecam above a Solari split-flap board listing all
-12 players, cycling through four stats every 9 seconds. The chiron along the
+12 players by hero icon, cycling through four stats every 9 seconds. The chiron along the
 bottom rolls through five themed turns. A layered Deadlock mark sits in the
 chiron's left bay and turns one notch on each chiron turn.
 
@@ -188,19 +189,24 @@ Two suites are worth knowing about:
 
 ### Regenerating vendored assets
 
-The fonts, logo SVGs and colour tokens are committed, so you never need these
-unless upstream changes:
+The fonts, logo SVGs, hero icons and colour tokens are committed, so you never
+need these unless upstream changes:
 
 ```bash
 npm run tokens     # regenerates overlay/tokens.css from /v1/assets/colors
-npm run vendor     # re-downloads fonts and the three logo layers
+npm run vendor     # re-downloads fonts, the three logo layers and 39 hero icons
 npm run fixtures   # re-records fixtures/ from live API responses
 ```
 
-`npm run fixtures` projects the Steam response down to the four fields the
-overlay actually reads. The live endpoint also returns `realname`,
-`countrycode` and a `friends` array of ~1,000 third parties who were never in
-your match — none of which this project commits.
+`npm run fixtures` projects the Steam response down to the two fields the
+overlay actually reads — an account id and a persona name, the latter only
+because the chiron names opponents. The live endpoint also returns `realname`,
+`countrycode`, avatar URLs and a `friends` array of ~1,000 third parties who
+were never in your match — none of which this project commits.
+
+Hero icons are vendored by hero id, so the board resolves `heroes/<id>.webp`
+with no manifest. A hero with no vendored icon falls back to a styled plate
+rather than leaving a gap.
 
 ---
 
