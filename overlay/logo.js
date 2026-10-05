@@ -25,11 +25,19 @@ export async function mountLogo(host) {
   return mark;
 }
 
-/** One 180 degree turn to mark a state boundary. Occludes nothing. */
+/**
+ * One 180 degree turn to mark a state boundary. Occludes nothing.
+ * Cleanup rides the animation's own 'animationend' rather than a timer, so it
+ * can never desync from --xition-sweep (tokens.css) however that is tuned.
+ */
 export function sweepLogo(mark) {
   if (!mark) return;
   mark.classList.remove('sweep');
   void mark.offsetWidth;            // force reflow so the animation restarts
   mark.classList.add('sweep');
-  setTimeout(() => mark.classList.remove('sweep'), 1250);
+  mark.addEventListener('animationend', function onEnd(e) {
+    if (e.animationName !== 'mark-sweep') return;
+    mark.removeEventListener('animationend', onEnd);
+    mark.classList.remove('sweep');
+  });
 }
