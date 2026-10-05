@@ -321,11 +321,16 @@ test('match-history fixture has the fields derive.js needs', () => {
   }
 });
 
-test('match-history fixture retains at least one abandoned match', () => {
+test('match-history fixture abandon coverage (informational)', () => {
   const rows = load('match-history.sample.json');
   const ab = rows.filter(r => typeof r.abandoned_time_s === 'number' && r.abandoned_time_s > 0);
-  assert.ok(ab.length >= 1,
-    'fixture must include a real abandon so the sentinel test is meaningful');
+  // Deliberately NOT an assertion. Abandons occur at ~0.09%, so whether the
+  // recorded subject has one is a roster lottery, and a suite that fails on
+  // unlucky data teaches people to re-run instead of read. The real gate for
+  // the 0-vs-null sentinel is Task 4's synthetic tests, which are
+  // deterministic and pin it from both sides.
+  console.log(`      fixture abandons: ${ab.length} of ${rows.length} entries`);
+  assert.ok(Array.isArray(rows), 'fixture parses');
 });
 
 test('active fixture carries a 12-player roster', () => {
@@ -1089,8 +1094,13 @@ git commit -m "feat: API client with bounded concurrency, config and advisory TT
 **Interfaces:**
 - Consumes: `derivePlayer` (Task 4), `rankLabel`/`tierColor` (Task 3), `FACTIONS`/`TEAM0_IS_AMBER` (Task 5).
 - Produces:
-  - `buildState({ match, steam, ranks, histories, session, now }) → StateDoc`
+  - `buildState({ match, steam, ranks, derived, session, now }) → StateDoc`
   - `emptyState(reason) → StateDoc` with `phase: 'IDLE'`
+  - `derived` is a `Map<accountId, DerivedStats>` — the output of
+    `derivePlayer`, **not** raw history arrays. The caller derives and discards
+    each 2.5 MB payload as it goes, so peak memory is one history rather than
+    twelve (~30 MB). `playerRow` therefore consumes pre-derived stats and never
+    calls `derivePlayer` itself.
   - `StateDoc` shape, which the entire overlay renders from:
 
 ```js
@@ -1125,6 +1135,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildState, emptyState } from '../proxy/state.js';
+import { derivePlayer } from '../proxy/derive.js';
 
 const load = f => JSON.parse(readFileSync(`fixtures/${f}`, 'utf8'));
 const match = load('active.sample.json');
@@ -1132,11 +1143,16 @@ const steam = load('steam.sample.json');
 const ranks = load('rank.sample.json');
 const history = load('match-history.sample.json');
 
-/** every roster member gets the same history — enough to exercise the shape */
-const fullHistories = new Map(match.players.map(p => [p.account_id, history]));
+/**
+ * buildState takes PRE-DERIVED stats, not raw histories — the caller reduces
+ * each 2.5MB payload and releases it. Every roster member gets the same
+ * derived block here, which is enough to exercise the document's shape.
+ */
+const stats = derivePlayer(history);
+const fullDerived = new Map(match.players.map(p => [p.account_id, stats]));
 
 test('builds two teams of six from a 12-player roster', () => {
-  const s = buildState({ match, steam, ranks, histories: fullHistories, session: {}, now: 1 });
+  const s = buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
   assert.equal(s.phase, 'MATCH');
   assert.equal(s.teams.length, 2);
   assert.equal(s.teams[0].players.length, 6);
@@ -1146,7 +1162,7 @@ test('builds two teams of six from a 12-player roster', () => {
 });
 
 test('every player row carries board-ready strings within the cell budget', () => {
-  const s = buildState({ match, steam, ranks, histories: fullHistories, session: {}, now: 1 });
+  const s = buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
   for (const team of s.teams) {
     for (const p of team.players) {
       assert.equal(p.form.length, 11, 'FORM must fill all 11 cells');
@@ -1176,11 +1192,20 @@ Expected: FAIL — cannot find module `../proxy/state.js`.
 - [ ] **Step 3: Write `proxy/state.js`**
 
 ```js
-import { derivePlayer } from './derive.js';
 import { rankLabel, tierColor } from './rank.js';
 import { FACTIONS, TEAM0_IS_AMBER, ACCOUNT_ID } from './config.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
+
+/** Shape-compatible zero value, so a player with no history still renders. */
+const EMPTY_DERIVED = {
+  form: ' '.repeat(11),
+  season: { wins: 0, losses: 0, text: '0-0' },
+  abandons: 0,
+  streak: { kind: null, n: 0 },
+  averages: { kd: 0, netWorth: 0, lastHits: 0, denies: 0, matchLen: 0 },
+  matches: 0
+};
 
 function indexBy(rows, key) {
   const m = new Map();
@@ -1191,10 +1216,12 @@ function indexBy(rows, key) {
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
-function playerRow(p, steamById, rankById, histories) {
+function playerRow(p, steamById, rankById, derived) {
   const prof = steamById.get(p.account_id);
   const rk = rankById.get(p.account_id);
-  const d = derivePlayer(histories.get(p.account_id) ?? []);
+  // Pre-derived by the caller so each 2.5MB history is released before the
+  // next is fetched. EMPTY_DERIVED keeps a missing entry renderable.
+  const d = derived.get(p.account_id) ?? EMPTY_DERIVED;
   const kd = d.averages.kd;
   return {
     accountId: p.account_id,
@@ -1229,7 +1256,7 @@ export function emptyState(reason = '') {
   };
 }
 
-export function buildState({ match, steam, ranks, histories, session = {}, now = Date.now() }) {
+export function buildState({ match, steam, ranks, derived, session = {}, now = Date.now() }) {
   if (!match?.players?.length) return { ...emptyState('no active match'), generatedAt: now };
 
   const steamById = indexBy(steam, 'account_id');
@@ -1239,7 +1266,7 @@ export function buildState({ match, steam, ranks, histories, session = {}, now =
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, histories));
+    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map()));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {
@@ -1275,7 +1302,7 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
     match,
     steam: steam.filter(r => r.account_id !== victim),
     ranks: ranks.filter(r => r.account_id !== victim),
-    histories: fullHistories, session: {}, now: 1
+    derived: fullDerived, session: {}, now: 1
   });
 
   const all = s.teams.flatMap(t => t.players);
@@ -1291,8 +1318,8 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
 });
 
 test('a player with no history at all still renders', () => {
-  const thin = new Map(match.players.map(p => [p.account_id, []]));
-  const s = buildState({ match, steam, ranks, histories: thin, session: {}, now: 1 });
+  const thin = new Map(match.players.map(p => [p.account_id, derivePlayer([])]));
+  const s = buildState({ match, steam, ranks, derived: thin, session: {}, now: 1 });
   for (const p of s.teams.flatMap(t => t.players)) {
     assert.equal(p.form.length, 11);
     assert.equal(p.season, '0-0');
@@ -1301,16 +1328,28 @@ test('a player with no history at all still renders', () => {
   }
 });
 
-test('the operator is pinned first in their own faction', () => {
-  const self = match.players[4];
-  const s = buildState({
-    match, steam, ranks, histories: fullHistories, session: {}, now: 1
-  });
-  for (const team of s.teams) {
-    const idx = team.players.findIndex(p => p.isSelf);
-    if (idx >= 0) assert.equal(idx, 0, 'self must be row 0 of its faction');
-  }
-  assert.ok(self);
+test('the operator is pinned first in their own faction', async () => {
+  // ACCOUNT_ID is read from the environment when config.js is first loaded,
+  // so it must be set BEFORE the dynamic import — and this test needs its own
+  // module instance, which is why it imports rather than using the top-level
+  // buildState. Without this the assertion is vacuous: nobody is ever isSelf.
+  const target = match.players[4].account_id;
+  process.env.DSN_ACCOUNT_ID = String(target);
+  const fresh = await import(`../proxy/state.js?selftest=${target}`);
+
+  const s = fresh.buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
+  const all = s.teams.flatMap(t => t.players);
+
+  const selves = all.filter(p => p.isSelf);
+  assert.equal(selves.length, 1, 'exactly one row must be flagged as the operator');
+  assert.equal(selves[0].accountId, target);
+
+  const owning = s.teams.find(t => t.players.some(p => p.isSelf));
+  assert.equal(owning.players[0].isSelf, true,
+    'the operator must be row 0 of their own faction, not merely present');
+  assert.equal(owning.players.length, 6, 'pinning must not change the faction size');
+
+  delete process.env.DSN_ACCOUNT_ID;
 });
 ```
 
@@ -1359,15 +1398,17 @@ async function refresh() {
     const ids = match.players.map(p => p.account_id);
     const [steam, ranks] = await Promise.all([batchSteam(ids), batchRank(ids)]);
 
-    const histories = new Map();
+    // Derive inside the worker so each ~2.5MB payload is reduced to a small
+    // object and released before the next is fetched. Peak memory is one
+    // history, not twelve.
+    const derived = new Map();
     await mapLimited(ids, async id => {
       const raw = await matchHistory(id);
-      histories.set(id, raw);          // reduced below, then released
+      derived.set(id, derivePlayer(raw));
       return true;
     });
 
-    const state = buildState({ match, steam, ranks, histories });
-    histories.clear();
+    const state = buildState({ match, steam, ranks, derived });
     matchCache.set(key, state);
     current = state;
   } catch (err) {
@@ -1391,11 +1432,12 @@ const server = createServer((req, res) => {
   if (url.pathname === '/fixture') {
     const match = JSON.parse(readFileSync('fixtures/active.sample.json', 'utf8'));
     const history = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
+    const stats = derivePlayer(history);
     const state = buildState({
       match,
       steam: JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8')),
       ranks: JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8')),
-      histories: new Map(match.players.map(p => [p.account_id, history]))
+      derived: new Map(match.players.map(p => [p.account_id, stats]))
     });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));
@@ -1910,7 +1952,9 @@ function bandEl(team) {
   const band = document.createElement('div');
   band.className = 'band';
   band.style.setProperty('--band', `var(${team.colorVar})`);
-  band.innerHTML = `<span>${team.faction}</span>`;
+  const label = document.createElement('span');
+  label.textContent = team.faction;
+  band.appendChild(label);
   return band;
 }
 
@@ -2180,6 +2224,25 @@ export const TURNS = [
 const self = s => s.teams.flatMap(t => t.players).find(p => p.isSelf)
             ?? s.teams[0]?.players[0];
 
+/**
+ * Element builders. These exist so no API-sourced string is ever parsed as
+ * HTML. `textContent` assigns text, full stop — a persona name of
+ * `<img src=x onerror=alert(1)>` renders as those literal characters.
+ */
+function div(cls, text) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = String(text ?? '');
+  return d;
+}
+
+function punit(label, value) {
+  const u = document.createElement('div');
+  u.className = 'punit';
+  u.append(div('plabel', label), div('pvalue', value));
+  return u;
+}
+
 let els = null;
 let currentRow = null;
 
@@ -2189,15 +2252,16 @@ export function renderTurn(state, turnIndex) {
   if (!els) return;
   const turn = TURNS[turnIndex % TURNS.length];
 
-  els.spine.innerHTML =
-    `<div class="spine-sub">${turn.sub}</div><div class="spine-title">${turn.spine}</div>`;
+  els.spine.replaceChildren(
+    div('spine-sub', turn.sub),
+    div('spine-title', turn.spine)
+  );
 
   const me = self(state);
-  els.persistent.innerHTML =
-    `<div class="punit"><div class="plabel">Today</div>` +
-    `<div class="pvalue">${state.session.todayRecord ?? '-'}</div></div>` +
-    `<div class="punit"><div class="plabel">Rank</div>` +
-    `<div class="pvalue">${me?.rank ?? '-'}</div></div>`;
+  els.persistent.replaceChildren(
+    punit('Today', state.session.todayRecord ?? '-'),
+    punit('Rank', me?.rank ?? '-')
+  );
 
   if (currentRow) {
     const old = currentRow;
@@ -2213,10 +2277,11 @@ export function renderTurn(state, turnIndex) {
     const g = document.createElement('div');
     g.className = 'group' + (i === 0 ? ' lead' : '');
     g.style.animationDelay = `${120 + i * 70}ms`;
-    g.innerHTML =
-      `<div class="glabel">${label}</div>` +
-      `<div class="gvalue">${value}</div>` +
-      (sub ? `<div class="gsub">${sub}</div>` : '');
+    // textContent, never innerHTML: `label` carries Steam persona names on the
+    // Matchup turn, and those are attacker-controlled by every player in the
+    // match. See the security note in this task.
+    g.append(div('glabel', label), div('gvalue', value));
+    if (sub) g.appendChild(div('gsub', sub));
     row.appendChild(g);
   });
   els.groups.appendChild(row);
@@ -2298,11 +2363,93 @@ Run `npm run serve`, open `http://localhost:7331/`. Expected: the chiron cycles 
 
 Confirm the chiron is motionless for most of each 9s hold — that stillness is the point, per spec §6.1.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Write the injection regression test**
+
+The Matchup turn puts Steam persona names in the `label` position, and a
+persona name is attacker-controlled by **every player in the match, opponents
+included**. A name of `<img src=x onerror=…>` reaching an `innerHTML` sink
+would execute in the overlay page — which runs inside OBS's Chromium with
+reach to the local proxy. The realistic attack is defacing a live broadcast by
+renaming yourself.
+
+The renderers already use `textContent`. This test stops that silently
+regressing, and needs no DOM:
+
+Create `tests/injection.test.js`:
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+/**
+ * The overlay renders Steam persona names, which are attacker-controlled.
+ * Only logo.js may use innerHTML, and only to inject the three SVG layers we
+ * vendor ourselves into overlay/logo/ — never anything from the API.
+ */
+const API_FACING = ['overlay/chiron.js', 'overlay/board.js', 'overlay/app.js'];
+
+for (const file of API_FACING) {
+  test(`${file} has no innerHTML sink`, () => {
+    const src = readFileSync(file, 'utf8');
+    assert.doesNotMatch(src, /\binnerHTML\b/,
+      `${file} renders API-sourced strings; use textContent, not innerHTML`);
+  });
+
+  test(`${file} does not use insertAdjacentHTML or document.write either`, () => {
+    const src = readFileSync(file, 'utf8');
+    assert.doesNotMatch(src, /insertAdjacentHTML|document\.write|outerHTML\s*=/,
+      `${file} must not parse strings as HTML`);
+  });
+}
+
+test('logo.js innerHTML is confined to locally vendored SVG', () => {
+  const src = readFileSync('overlay/logo.js', 'utf8');
+  // It may use innerHTML, but only on text fetched from our own logo/ dir.
+  assert.match(src, /fetch\(`logo\/\$\{name\}\.svg`\)|fetch\('logo\//,
+    'logo.js must read its SVG from the vendored local directory');
+  assert.doesNotMatch(src, /api\.deadlock-api\.com|assets-bucket/,
+    'logo.js must not fetch SVG from the network at runtime');
+});
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+Run: `node --test tests/injection.test.js`
+Expected: PASS, 7 tests. If any fails, the renderer in question is building
+markup from strings — replace it with `createElement` + `textContent`.
+
+- [ ] **Step 7: Verify a hostile name renders inertly**
+
+With the server running, confirm by hand that a malicious persona name is
+displayed rather than executed. Temporarily edit one name in
+`fixtures/steam.sample.json`:
 
 ```bash
-git add overlay/chiron.js overlay/overlay.css overlay/app.js
-git commit -m "feat: chiron with themed turns, rolling groups and a persistent zone"
+node -e "
+  const fs = require('fs');
+  const f = 'fixtures/steam.sample.json';
+  const rows = JSON.parse(fs.readFileSync(f, 'utf8'));
+  rows[0].personaname = '<img src=x onerror=\"document.body.style.background=1\">';
+  fs.writeFileSync(f + '.bak', JSON.stringify(JSON.parse(fs.readFileSync(f,'utf8')), null, 2));
+  fs.writeFileSync(f, JSON.stringify(rows, null, 2));
+  console.log('injected a hostile name into row 0; backup at ' + f + '.bak');
+"
+```
+
+Reload `http://localhost:7331/?fixture`. Expected: the literal characters
+`<img src=x onerror=...>` appear in the board row, the page background is
+unchanged, and the browser console shows no errors. Then restore:
+
+```bash
+mv fixtures/steam.sample.json.bak fixtures/steam.sample.json
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add overlay/chiron.js overlay/overlay.css overlay/app.js tests/injection.test.js
+git commit -m "feat: chiron with themed turns, plus an injection regression gate"
 ```
 
 ---
@@ -2790,13 +2937,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildState, emptyState, fallbackState } from '../proxy/state.js';
+import { derivePlayer } from '../proxy/derive.js';
 
 const load = f => JSON.parse(readFileSync(`fixtures/${f}`, 'utf8'));
 const match = load('active.sample.json');
 const history = load('match-history.sample.json');
+const stats = derivePlayer(history);
 const good = buildState({
   match, steam: load('steam.sample.json'), ranks: load('rank.sample.json'),
-  histories: new Map(match.players.map(p => [p.account_id, history]))
+  derived: new Map(match.players.map(p => [p.account_id, stats]))
 });
 
 test('a fallback keeps the last good roster rather than blanking', () => {
@@ -2823,7 +2972,7 @@ test('no state document ever contains undefined, NaN or null names', () => {
 
 test('malformed upstream payloads degrade instead of throwing', () => {
   for (const bad of [{}, { players: [] }, { players: null }, null, undefined]) {
-    const doc = buildState({ match: bad, steam: [], ranks: [], histories: new Map() });
+    const doc = buildState({ match: bad, steam: [], ranks: [], derived: new Map() });
     assert.equal(doc.phase, 'IDLE');
     assert.equal(doc.teams.length, 2);
   }
@@ -2832,7 +2981,7 @@ test('malformed upstream payloads degrade instead of throwing', () => {
 test('garbage in the batch responses does not break the board', () => {
   const doc = buildState({
     match, steam: [null, { nope: 1 }], ranks: 'not an array',
-    histories: new Map()
+    derived: new Map()
   });
   const all = doc.teams.flatMap(t => t.players);
   assert.equal(all.length, 12);
