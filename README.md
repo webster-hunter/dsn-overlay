@@ -57,7 +57,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 168 tests, no install step needed
+npm test          # 164 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -179,8 +179,8 @@ is lost.
 ## Usage
 
 Start the proxy before going live and leave it running. It polls for an active
-match every 15 seconds; when one is detected it fetches the roster once and the
-overlay fills in within a few seconds. Nothing needs clicking.
+match every 15 seconds — from Deadlock's own log, falling back to the API — and
+fetches your match history when one ends. Nothing needs clicking.
 
 The overlay is a pure function of one JSON document, so if it looks wrong, look
 at `/state` first.
@@ -228,7 +228,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-168 tests across 22 files, run by `node --test`. The quoted glob in the script
+164 tests across 22 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -293,9 +293,14 @@ Deadlock APIs ──► proxy (Node, localhost:7331) ──► /state ──► 
 ```
 
 The proxy is the only thing that talks to the Deadlock API; the overlay never
-does. Match history for 12 players is roughly 18 MB, so it is fetched **once
-per match** at concurrency 3 and reduced to small derived stats before it ever
-reaches the browser.
+does. It fetches exactly one history — yours, about 2.5 MB — and reduces it to
+small derived stats before anything reaches the browser.
+
+It used to assemble a 12-player roster: twelve Steam profiles, twelve rank rows
+and twelve histories at roughly 18.5 MB, to fill a `teams` array. Nothing
+rendered it (see *No live roster* under Known limitations), so it is gone, and
+with it the bounded-concurrency fetching that existed to keep that payload from
+arriving all at once.
 
 The state document always has the same shape, whatever happens upstream. Every
 failure degrades to last-known-good or to dashes — the overlay should never
@@ -324,8 +329,8 @@ Environment:
 | `DSN_TWITCH_CHANNEL` | empty | the channel whose chat fills the right rail, read-only. Blank leaves a placeholder card. |
 | `PORT` | `7331` | |
 
-Tunables live in `proxy/config.js` — poll interval, cache TTLs, history
-concurrency, and the faction names. Visual tokens (colours, type, timings) live
+Tunables live in `proxy/config.js` — poll interval, the history cache TTL and
+the idle re-check interval. Visual tokens (colours, type, timings) live
 in `overlay/tokens.css`; durations referenced by JavaScript are read from those
 tokens rather than duplicated as literals.
 

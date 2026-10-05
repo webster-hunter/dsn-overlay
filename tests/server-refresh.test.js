@@ -27,6 +27,8 @@ test('a failed refresh wires through fallbackState: current ends up stale with t
   assert.equal(mod.current.stale, true);
   assert.ok(mod.current.reason.includes('simulated upstream outage'),
     `reason should carry the thrown error's message, got: ${mod.current.reason}`);
-  // Shape parity must survive the failure path too.
-  assert.equal(mod.current.teams.length, 2);
+  // Shape parity must survive the failure path too. The roster is gone, so
+  // what has to be present is the operator slot and the session block.
+  assert.ok('operator' in mod.current);
+  assert.ok('session' in mod.current);
 });

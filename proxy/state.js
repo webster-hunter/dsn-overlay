@@ -1,6 +1,5 @@
 import { rankLabel } from './rank.js';
-import { FACTIONS, TEAM0_IS_AMBER, STREAMER } from './config.js';
-import { GAME_MODES } from './derive.js';
+import { STREAMER } from './config.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
 
@@ -104,71 +103,44 @@ export function operatorRow({ accountId, steam = [], ranks = [], derived = new M
   );
 }
 
+/**
+ * The state document. One shape, always — every field present whatever happened
+ * upstream, so the overlay is a pure render of it and never has to branch on
+ * absence.
+ *
+ * There is no roster here. `teams` and `factions` were removed with the Matchup
+ * turn: the API cannot report the players in a live match, nothing on screen
+ * showed them, and keeping the array meant fetching twelve Steam profiles,
+ * twelve rank rows and twelve match histories (~18.5 MB) to fill something no
+ * renderer read. Everything the chiron shows is about the operator.
+ *
+ * `phase` is still the match phase, supplied by the game log — it is what fires
+ * the sweep and the ident, and that does not need a roster.
+ */
 export function emptyState(reason = '', { operator = null, session = {}, mode = 'normal' } = {}) {
   return {
     phase: 'IDLE', matchId: null, reason, operator, mode,
-    factions: FACTIONS,
-    teams: [
-      { faction: FACTIONS.amber, players: [] },
-      { faction: FACTIONS.sapphire, players: [] }
-    ],
     session, streamer: STREAMER, generatedAt: Date.now()
   };
 }
 
-export function buildState({
-  match, steam, ranks, derived, operatorId = 0, session = {}, now = Date.now()
-}) {
-  if (!match?.players?.length) return { ...emptyState('no active match'), generatedAt: now };
-
-  const steamById = indexBy(steam, 'account_id');
-  const rankById = indexBy(ranks, 'account_id');
-
-  // The board follows the match: in a brawl game every row shows brawl stats.
-  const mode = match.game_mode === GAME_MODES.brawl ? 'brawl' : 'normal';
-
-  const amberIdx = TEAM0_IS_AMBER ? 0 : 1;
-  const stats = derived ?? new Map();
-  const bucket = { amber: [], sapphire: [] };
-  for (const p of match.players) {
-    const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, stats, operatorId, mode));
-  }
-  // The operator is pinned first within their own faction — spec section 5.1.
-  for (const side of ['amber', 'sapphire']) {
-    bucket[side].sort((a, b) => Number(b.isSelf) - Number(a.isSelf));
-  }
-
-  const doc = {
-    phase: 'MATCH',
-    mode,
-    matchId: match.match_id ?? null,
-    factions: FACTIONS,
-    teams: [
-      { faction: FACTIONS.amber, players: bucket.amber },
-      { faction: FACTIONS.sapphire, players: bucket.sapphire }
-    ],
-    session,
-    streamer: STREAMER,
-    generatedAt: now
-  };
-  // One place to find the streamer, match or no match: during a match this is
-  // the same object already pinned first in their faction.
-  doc.operator = [...bucket.amber, ...bucket.sapphire].find(p => p.isSelf) ?? null;
-  return doc;
-}
-
 /**
  * Serve the last good document rather than nothing. Spec section 9: never
- * render a hole. `stale` is for our logs — the overlay does not surface it,
- * because a real network never captions which feed failed.
+ * render a hole. `stale` is for our logs — the overlay does not surface which
+ * feed failed, because a real broadcast does not caption its own plumbing. It
+ * shows the AGE of the data instead; see session.lastMatchAt.
  */
 export function fallbackState(previous, reason = '') {
-  // teams.length is always 2 — emptyState included — so checking it tells us
-  // nothing about whether `previous` actually carries a roster. Check for a
-  // player row instead, or a cold-start failure freezes generatedAt on the
-  // starting placeholder forever instead of refreshing it each tick.
-  if (previous?.teams?.some(t => t.players?.length)) {
+  // Keyed on the operator row, which is the whole of what the chiron renders.
+  // This checked `teams` for a player row until the roster was removed —
+  // `teams` is gone, so that test was silently false and every failure, even
+  // after a good fetch, fell through to the empty document. The condition has
+  // to name something the document still has.
+  //
+  // Checking for the row rather than for the document means a cold-start
+  // failure refreshes generatedAt each tick instead of freezing on the
+  // starting placeholder.
+  if (previous?.operator) {
     return { ...previous, stale: true, reason };
   }
   return { ...emptyState(reason), stale: true };

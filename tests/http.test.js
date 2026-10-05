@@ -76,7 +76,8 @@ test('a normal static asset and /fixture still work', async () => {
   const fixture = await request('/fixture');
   assert.equal(fixture.status, 200);
   const doc = JSON.parse(fixture.body);
-  assert.equal(doc.teams.length, 2);
+  assert.ok('operator' in doc, 'the document always carries the operator slot');
+  assert.ok('session' in doc, 'and the session block');
 });
 
 test('overlay code is served no-store, so an edit is never masked by a cache', async () => {

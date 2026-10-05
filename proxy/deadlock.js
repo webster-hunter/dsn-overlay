@@ -1,4 +1,3 @@
-import { HISTORY_CONCURRENCY } from './config.js';
 
 const API = 'https://api.deadlock-api.com/v1';
 
@@ -54,29 +53,3 @@ export function matchHistory(accountId) {
   return get(`/players/${accountId}/match-history`);
 }
 
-/**
- * Map ids through fn with bounded concurrency. Twelve histories total ~18.5MB;
- * pulling them all at once would hold that in memory and compete with the
- * stream's uplink for no benefit. Three at a time measures at 2.4s wall clock,
- * which is immaterial against a 30-40 minute match.
- */
-export async function mapLimited(ids, fn, limit = HISTORY_CONCURRENCY) {
-  const out = new Map();
-  const queue = ids.slice();
-  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
-    while (queue.length) {
-      const id = queue.shift();
-      try {
-        out.set(id, await fn(id));
-      } catch (err) {
-        // Isolate the failure — one bad history must not lose the other eleven —
-        // but do not swallow it silently, or a null is indistinguishable from a
-        // genuinely empty history when the chiron shows those stats as zeroes.
-        console.error(`[mapLimited] ${id} failed: ${err.message}`);
-        out.set(id, null);
-      }
-    }
-  });
-  await Promise.all(workers);
-  return out;
-}

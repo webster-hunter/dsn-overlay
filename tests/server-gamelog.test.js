@@ -71,15 +71,15 @@ test('an open lobby puts the document in MATCH even though the API reports no ma
   assert.notEqual(mod.current.phase, 'IDLE');
 });
 
-test('the operator row is still populated when the roster is not', async () => {
+test('the operator row is populated for a match the API never named', async () => {
   writeFileSync(LOG, lobbyOpen);
   await mod.doRefresh();
 
   assert.ok(mod.current.operator, 'four of the five chiron turns need this row');
   assert.equal(mod.current.operator.accountId, ACCOUNT);
-  assert.equal(mod.current.teams.length, 2, 'shape parity holds');
-  assert.deepEqual(mod.current.teams.map(t => t.players.length), [0, 0],
-    'the API cannot supply a live roster, and the overlay renders that as dashes');
+  assert.ok('session' in mod.current, 'shape parity holds');
+  assert.equal(mod.current.teams, undefined,
+    'no roster is assembled: the API cannot supply one and nothing renders it');
 });
 
 test('a destroyed lobby returns to IDLE, which is what fires the ident', async () => {

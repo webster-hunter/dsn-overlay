@@ -1,76 +1,102 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildState, emptyState, fallbackState } from '../proxy/state.js';
+import { emptyState, fallbackState, operatorRow } from '../proxy/state.js';
 import { derivePlayer } from '../proxy/derive.js';
 
-const load = f => JSON.parse(readFileSync(`fixtures/${f}`, 'utf8'));
-const match = load('active.sample.json');
-const history = load('match-history.sample.json');
-const stats = derivePlayer(history);
-const good = buildState({
-  match, steam: load('steam.sample.json'), ranks: load('rank.sample.json'),
-  derived: new Map(match.players.map(p => [p.account_id, stats]))
+/**
+ * Spec section 9: never render a hole. On a live broadcast the failure that
+ * matters is not an error message, it is the board going blank — so every
+ * upstream failure has to degrade to last-known-good or to dashes.
+ */
+const ACCOUNT = 900000001;
+const history = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
+const steam = JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8'));
+const ranks = JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8'));
+const derived = new Map([[ACCOUNT, derivePlayer(history)]]);
+const good = () => emptyState('ok', {
+  operator: operatorRow({ accountId: ACCOUNT, steam, ranks, derived }),
+  session: { todayRecord: '3-1' }
 });
 
-test('a fallback keeps the last good roster rather than blanking', () => {
-  const f = fallbackState(good, 'api down');
-  assert.equal(f.teams[0].players.length, 6);
-  assert.equal(f.teams[1].players.length, 6);
-  assert.equal(f.stale, true);
+test('a fallback keeps the last good document rather than blanking it', () => {
+  const previous = good();
+  const out = fallbackState(previous, 'upstream exploded');
+  assert.equal(out.stale, true);
+  assert.equal(out.reason, 'upstream exploded');
+  assert.equal(out.operator.accountId, ACCOUNT, 'the row survives the outage');
+  assert.equal(out.session.todayRecord, '3-1', 'and so does the session block');
+});
+
+test('the fallback condition names something the document still has', () => {
+  // It keyed on `previous.teams` having a player row. `teams` was removed with
+  // the roster, which made that test silently false — so EVERY failure, even
+  // one following a perfectly good fetch, threw the last good document away and
+  // served the empty one. A condition about a field that no longer exists does
+  // not fail loudly; it just stops being true.
+  const out = fallbackState(good(), 'x');
+  assert.ok(out.operator, 'a document with an operator row must be preserved');
 });
 
 test('a fallback with no previous state is still renderable', () => {
-  const f = fallbackState(null, 'cold start');
-  assert.equal(f.phase, 'IDLE');
-  assert.ok(Array.isArray(f.teams));
-  assert.equal(f.teams.length, 2);
+  const out = fallbackState(null, 'cold start failed');
+  assert.equal(out.stale, true);
+  assert.equal(out.phase, 'IDLE');
+  assert.equal(out.operator, null);
+  assert.equal(out.reason, 'cold start failed');
 });
 
-test('a fallback from a cold-start document with no player rows refreshes generatedAt rather than freezing it', () => {
-  // teams.length is 2 on every document this codebase emits, emptyState
-  // included, so checking THAT tells fallbackState nothing about whether
-  // there is a real roster to preserve. Pin a sentinel generatedAt far in
-  // the past on a player-less "previous" doc (exactly what `current` holds
-  // on a cold start) and confirm the fallback does NOT just spread it
-  // forward — that would freeze the clock on the starting placeholder
-  // forever instead of refreshing it on every failed tick.
-  const cold = { ...emptyState('starting'), generatedAt: 1 };
-  const f = fallbackState(cold, 'api down');
-  assert.equal(f.teams[0].players.length, 0);
-  assert.equal(f.teams[1].players.length, 0);
-  assert.equal(f.stale, true);
-  assert.notEqual(f.generatedAt, 1, 'generatedAt must not freeze on a cold start with no previous roster');
+test('a cold-start failure refreshes generatedAt rather than freezing it', () => {
+  // Without this the starting placeholder's timestamp would stick for the whole
+  // broadcast, and the overlay's freshness line would stop advancing — which is
+  // the one signal that says the proxy has stopped working.
+  const first = fallbackState(emptyState('starting'), 'still down');
+  const later = fallbackState(emptyState('starting'), 'still down');
+  assert.ok(later.generatedAt >= first.generatedAt);
+  assert.equal(later.operator, null, 'there was never a row to keep');
 });
 
-test('no state document ever contains undefined, NaN or null names', () => {
-  for (const doc of [good, emptyState('x'), fallbackState(good, 'y'), fallbackState(null, 'z')]) {
+test('no document ever carries undefined, NaN or an empty name', () => {
+  for (const doc of [emptyState(), good(), fallbackState(good(), 'x'),
+                     fallbackState(null, 'y')]) {
     const json = JSON.stringify(doc);
-    assert.doesNotMatch(json, /NaN/, 'NaN leaked into the document');
-    assert.doesNotMatch(json, /"name":\s*(null|"")/, 'an empty name leaked');
+    assert.doesNotMatch(json, /NaN/, 'NaN would render as the word NaN');
+    assert.doesNotMatch(json, /:\s*"undefined"/, 'a stringified undefined');
+    if (doc.operator) {
+      assert.ok(doc.operator.name.length > 0, 'a row always has some name');
+    }
   }
 });
 
-test('a malformed match payload degrades to IDLE instead of throwing', () => {
-  // {}, { players: [] }, { players: null }, null and undefined are all
-  // indistinguishable to buildState: every one trips the same
-  // `!match?.players?.length` guard. Pinning one representative case rather
-  // than five that can only pass or fail together.
-  const doc = buildState({ match: undefined, steam: [], ranks: [], derived: new Map() });
-  assert.equal(doc.phase, 'IDLE');
-  assert.equal(doc.teams.length, 2);
+test('garbage in the batch responses does not break the row', () => {
+  // The batch endpoints are documented loosely enough that a null row, a
+  // string, or a missing account_id are all possible.
+  const junk = [null, undefined, 'nope', 42, {}, { account_id: null },
+                { account_id: ACCOUNT, personaname: null }];
+  const r = operatorRow({ accountId: ACCOUNT, steam: junk, ranks: junk, derived });
+  assert.ok(r, 'a row is still produced');
+  assert.ok(r.name.length > 0, 'falling back to the placeholder name');
+  assert.equal(r.rank, 'UNRANKED', 'no usable rank row means unranked');
 });
 
-test('garbage in the batch responses does not break the board', () => {
-  const doc = buildState({
-    match, steam: [null, { nope: 1 }], ranks: 'not an array',
-    derived: new Map()
-  });
-  const all = doc.teams.flatMap(t => t.players);
-  assert.equal(all.length, 12);
-  for (const p of all) {
-    assert.equal(p.form.length, 11);
-    assert.ok(p.name.length > 0);
-    assert.doesNotMatch(p.rank, /undefined/);
+test('derivePlayer always returns the shape the row builder indexes into', () => {
+  // playerRow reads d.averages.kd, d.season.text, d.streak.kind and so on, and
+  // only substitutes EMPTY_DERIVED when the map has NOTHING for the account —
+  // a half-built object would throw on the first nested read. So rather than
+  // guarding a path that cannot occur (the map is filled in one place, from
+  // this function), the invariant that makes the guard unnecessary is what gets
+  // asserted. If deriveMode ever returns less than this, the row builder needs
+  // the guard and this test says so first.
+  for (const entries of [[], null, undefined, history, [{}], [{ hero_id: 1 }]]) {
+    const d = derivePlayer(entries);
+    assert.equal(typeof d.season?.text, 'string', 'season.text');
+    assert.equal(typeof d.form, 'string', 'form');
+    assert.equal(typeof d.streak?.kind, d.streak?.kind === null ? 'object' : 'string');
+    assert.equal(typeof d.averages?.kd, 'number', 'averages.kd');
+    for (const avg of ['netWorth', 'lastHits', 'denies', 'matchLen']) {
+      assert.equal(typeof d.averages?.[avg], 'number', `averages.${avg}`);
+    }
+    assert.ok(Array.isArray(d.heroPool), 'heroPool');
+    assert.ok(d.brawl?.averages, 'the brawl block is always present too');
   }
 });

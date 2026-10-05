@@ -3,22 +3,19 @@ import { readFileSync, statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
-import { buildState, emptyState, fallbackState, operatorRow } from './state.js';
-import { derivePlayer, sessionToday, isBrawl, isCountable, GAME_MODES } from './derive.js';
+import { emptyState, fallbackState, operatorRow } from './state.js';
+import { derivePlayer, sessionToday, isBrawl, isCountable } from './derive.js';
 import { makeCache } from './cache.js';
-import {
-  activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
-} from './deadlock.js';
+import { activeMatchFor, batchSteam, batchRank, matchHistory } from './deadlock.js';
 import { readGameLog } from './gamelog.js';
 import {
-  ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS, SELF_RECHECK_MS, DEADLOCK_LOG
+  ACCOUNT_ID, POLL_MS, CONTEXT_TTL_MS, SELF_RECHECK_MS, DEADLOCK_LOG
 } from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
 
 /** Served no-store so an edited overlay is never masked by a cached copy. */
 const CODE_EXT = new Set(['.html', '.js', '.css']);
-const matchCache = makeCache(MATCH_TTL_MS);
 // The operator's own history is one ~2.5MB call. Cached on the context TTL so
 // idling between matches costs one fetch an hour, not one per 15s poll.
 const selfCache = makeCache(CONTEXT_TTL_MS);
@@ -63,10 +60,9 @@ async function refresh() {
 }
 
 /**
- * Idle does not mean empty. Four of the chiron's five turns are about the
- * operator rather than the match, so between games we still build their row —
- * record, form, abandons, K/D — and leave `teams` empty, because only the
- * Matchup turn genuinely needs opponents.
+ * Idle does not mean empty. Every chiron turn is about the operator rather
+ * than the match, so between games their row is still built — record, form,
+ * abandons, K/D, the hero pool.
  *
  * A failure here must not escalate: the overlay showing dashes is the normal
  * idle look, so a bad fetch falls back to the plain idle document.
@@ -173,35 +169,13 @@ export async function doRefresh() {
       current = await idleState();
       return;
     }
+    // A match the API DID name. Nothing reads the roster any more — the chiron
+    // is all about the streamer — so the only thing taken from it is that a
+    // match exists, and its id. Assembling the roster meant twelve Steam
+    // profiles, twelve rank rows and twelve match histories at ~18.5 MB, to
+    // fill a `teams` array no renderer reads.
     sawMatch = true;
-
-    const key = String(match.match_id);
-    if (!matchCache.stale(key)) { current = matchCache.get(key); return; }
-
-    const ids = match.players.map(p => p.account_id);
-    const [steam, ranks] = await Promise.all([batchSteam(ids), batchRank(ids)]);
-
-    // Derive inside the worker so each ~2.5MB payload is reduced to a small
-    // object and released before the next is fetched. Peak memory is one
-    // history, not twelve.
-    const derived = new Map();
-    let session = {};
-    await mapLimited(ids, async id => {
-      const raw = await matchHistory(id);
-      derived.set(id, derivePlayer(raw));
-      // The operator's history is already in hand here, so today's numbers cost
-      // nothing extra — no second fetch, and the raw payload is still released
-      // before the next one arrives.
-      if (id === ACCOUNT_ID) {
-        session = sessionToday(raw, startOfToday(),
-          match.game_mode === GAME_MODES.brawl ? isBrawl : isCountable);
-      }
-      return true;
-    });
-
-    const state = buildState({ match, steam, ranks, derived, operatorId: ACCOUNT_ID, session });
-    matchCache.set(key, state);
-    current = state;
+    current = await liveState({ phase: 'MATCH', matchId: match.match_id ?? null });
   } catch (err) {
     console.error('[refresh]', err.message);
     current = fallbackState(current, err.message);
@@ -265,29 +239,31 @@ function handleRequest(req, res) {
   }
 
   if (url.pathname === '/fixture') {
-    const match = JSON.parse(readFileSync(new URL('active.sample.json', FIXTURES), 'utf8'));
+    // Builds the same shape /state does, from the same code path, so the
+    // development loop exercises what the broadcast actually renders. The
+    // recorded roster is no longer read: nothing displays opponents.
     const history = JSON.parse(readFileSync(new URL('match-history.sample.json', FIXTURES), 'utf8'));
-    const stats = derivePlayer(history);
-    const state = buildState({
-      match,
-      steam: JSON.parse(readFileSync(new URL('steam.sample.json', FIXTURES), 'utf8')),
-      ranks: JSON.parse(readFileSync(new URL('rank.sample.json', FIXTURES), 'utf8')),
-      derived: new Map(match.players.map(p => [p.account_id, stats])),
-      // The configured id only if the recorded roster actually contains it.
-      // `ACCOUNT_ID || players[0]` was backwards: a configured .env — which the
-      // README tells every user to set — is truthy but is not in this fixture,
-      // so no row was isSelf, `operator` came out null, and all five chiron
-      // turns rendered dashes. ?fixture worked only for an UNCONFIGURED proxy,
-      // which is the one state a developer never leaves it in.
-      operatorId: match.players.some(p => p.account_id === ACCOUNT_ID)
-        ? ACCOUNT_ID
-        : match.players[0].account_id,
-      // Without this the Session turn is dead in the only development path,
-      // which is where it gets looked at. The recorded history is old, so this
-      // exercises the honest case: no matches today, and a freshness age that
-      // says how long ago the newest one was.
-      session: sessionToday(history, startOfToday())
-    });
+    const derived = new Map();
+    const steam = JSON.parse(readFileSync(new URL('steam.sample.json', FIXTURES), 'utf8'));
+    const ranks = JSON.parse(readFileSync(new URL('rank.sample.json', FIXTURES), 'utf8'));
+    // The history sample belongs to whichever account it was recorded from, so
+    // the operator is that account rather than the configured one — a
+    // configured .env is not in these recordings, and preferring it left the
+    // operator null and every turn on dashes.
+    const subject = history.find(e => Number.isInteger(e.account_id))?.account_id
+      ?? steam[0]?.account_id ?? 0;
+    derived.set(subject, derivePlayer(history));
+    const mode = derived.get(subject)?.lastMode ?? 'normal';
+    const state = {
+      ...emptyState('fixture', {
+        operator: operatorRow({ accountId: subject, steam, ranks, derived, mode }),
+        // The recording is old, so this exercises the honest case: no matches
+        // today, and a freshness age saying how long ago the newest one was.
+        session: sessionToday(history, startOfToday(), mode === 'brawl' ? isBrawl : isCountable),
+        mode
+      }),
+      generatedAt: Date.now()
+    };
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));
   }
