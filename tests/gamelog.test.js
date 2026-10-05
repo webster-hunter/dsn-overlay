@@ -40,17 +40,13 @@ test('queueing is distinguished from being in a match', () => {
   assert.equal(s.matchId, null, 'no match exists yet, so no id may be reported');
 });
 
-test('a match id with no live state is not reported as the current match', () => {
-  // The rail is meant to show the CURRENT match only. An id sitting in the log
-  // tail with nothing saying a match is underway must not present as live.
-  //
-  // NOTE: the state Deadlock reports AFTER a match ends is not yet known — the
-  // capture used here was taken mid-match. Until that is observed, this pins
-  // the safe direction: absent a live state, report nothing as live.
+test('a lobby created and never destroyed is a match forming', () => {
+  // Written before the "destroyed" line was observed, this asserted IDLE on the
+  // theory that an id without a live state was stale. The lobby pair showed the
+  // opposite: a created lobby with no state yet IS a match, just not started.
   const s = parseLog('10/05 12:27:41 Lobby 174100000000000001 for Match 100000901 created');
-  assert.equal(s.phase, 'IDLE');
-  assert.equal(s.matchId, null, 'a stale id must not be reported as the live match');
-  assert.equal(s.lastMatchId, '100000901', 'but it is still available as the last match');
+  assert.equal(s.phase, 'FORMING');
+  assert.equal(s.matchId, '100000901');
 });
 
 test('an empty or absent log is idle, not an error', () => {
@@ -59,4 +55,25 @@ test('an empty or absent log is idle, not an error', () => {
     assert.equal(s.phase, 'IDLE');
     assert.equal(s.matchId, null);
   }
+});
+
+test('the hideout after a match is not mistaken for a live match', () => {
+  // Captured verbatim after a real match ended. The client returns to the
+  // hideout and reports GameInProgress (7) again — identical to the state
+  // during play. Only the lobby's "destroyed" line distinguishes them, which
+  // is why the parser keys on the lobby rather than on game state.
+  const afterMatch = `
+10/05 12:27:41 Lobby 174100000000000001 for Match 100000901 created
+10/05 12:27:58 OnGameStateChanged: GameInProgress (7)
+10/05 12:45:37 OnGameStateChanged: PostGame (8)
+10/05 12:45:38 Lobby 174100000000000001 for Match 100000901 destroyed
+10/05 12:45:47 OnGameStateChanged: End (11)
+10/05 12:45:52 ChangeGameState: GameInProgress (7)
+10/05 12:45:52 OnGameStateChanged: GameInProgress (7)
+`;
+  const s = parseLog(afterMatch);
+  assert.equal(s.phase, 'IDLE', 'the hideout is not a match');
+  assert.equal(s.state, 'GameInProgress', 'even though the state says otherwise');
+  assert.equal(s.matchId, null, 'nothing may be reported as the current match');
+  assert.equal(s.lastMatchId, '100000901', 'the finished match is still identifiable');
 });

@@ -19,9 +19,14 @@ import { existsSync, statSync, createReadStream } from 'node:fs';
 /**
  * Observed:
  *   10/05 12:27:41 Lobby 174100000000000001 for Match 100000901 created
- * Carries both ids in one line and appears exactly when the match is formed.
+ *   10/05 12:45:38 Lobby 174100000000000001 for Match 100000901 destroyed
+ *
+ * This pair is authoritative and game state is not. Observed after a match
+ * ended: the client returns to the hideout and reports GameInProgress (7)
+ * again, exactly as during a real match. Keying on state alone reported a live
+ * match while sitting in the menu.
  */
-const LOBBY_LINE = /Lobby\s+(\d+)\s+for\s+Match\s+(\d+)\s+created/i;
+const LOBBY_LINE = /Lobby\s+(\d+)\s+for\s+Match\s+(\d+)\s+(created|destroyed)/i;
 
 /**
  * Observed on the same second, as a second witness:
@@ -32,7 +37,9 @@ const MATCH_ID = /\bmatch_id=(\d+)/i;
 /**
  * Observed states, in the order the client passes through them:
  *   2 WaitingForPlayersToJoin, 3 HeroSelection, 4 MatchIntro,
- *   5 WaitForMapToLoad, 6 PreGameWait, 7 GameInProgress
+ *   5 WaitForMapToLoad, 6 PreGameWait, 7 GameInProgress, 8 PostGame, 11 End
+ * They only refine a match the lobby lines already established; the hideout
+ * emits several of them too.
  *
  * `OnGameStateChanged` is the client reporting its own state; `ChangeGameState`
  * also appears but fires during local setup too, so the former is preferred and
@@ -62,13 +69,22 @@ export function parseLog(text) {
   let lobbyId = null;
   let state = null;
   let queued = false;
+  let lobbyLive = false;
 
   for (const line of String(text ?? '').split(/\r?\n/)) {
     const lobby = line.match(LOBBY_LINE);
-    if (lobby) { lobbyId = lobby[1]; matchId = lobby[2]; queued = false; continue; }
+    if (lobby) {
+      lobbyId = lobby[1];
+      matchId = lobby[2];
+      lobbyLive = lobby[3].toLowerCase() === 'created';
+      queued = false;
+      continue;
+    }
 
+    // Only trust a bare match_id while a lobby is open; reconnect bookkeeping
+    // echoes the same id after the match is over.
     const mid = line.match(MATCH_ID);
-    if (mid) { matchId = mid[1]; continue; }
+    if (mid) { if (lobbyLive) matchId = mid[1]; continue; }
 
     const st = line.match(STATE) ?? line.match(STATE_FALLBACK);
     if (st) { state = st[1]; continue; }
@@ -76,18 +92,18 @@ export function parseLog(text) {
     if (QUEUE_START.test(line)) queued = true;
   }
 
-  const phase = IN_MATCH.has(state) ? 'MATCH'
-    : FORMING.has(state) ? 'FORMING'
-    : queued ? 'QUEUE'
-    : 'IDLE';
+  // The lobby decides whether a match exists; state only says how far along it
+  // is. Without this the hideout's own GameInProgress reads as a live match.
+  const phase = !lobbyLive ? (queued ? 'QUEUE' : 'IDLE')
+    : IN_MATCH.has(state) ? 'MATCH'
+    : 'FORMING';
 
-  // A match id without a live state is last match's id, not this one. The rail
-  // is meant to show the CURRENT match only, so do not report a stale id as live.
+  const live = phase === 'MATCH' || phase === 'FORMING';
   return {
     phase,
     state,
-    matchId: phase === 'MATCH' || phase === 'FORMING' ? matchId : null,
-    lobbyId: phase === 'MATCH' || phase === 'FORMING' ? lobbyId : null,
+    matchId: live ? matchId : null,
+    lobbyId: live ? lobbyId : null,
     lastMatchId: matchId
   };
 }
