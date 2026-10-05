@@ -39,3 +39,28 @@ test('rank fixture carries tier and subrank', () => {
   assert.equal(typeof r.rank, 'number');
   assert.equal(typeof r.subrank, 'number');
 });
+
+test('steam fixture carries what the board renders', () => {
+  const rows = load('steam.sample.json');
+  assert.equal(rows.length, 12);
+  for (const r of rows) {
+    assert.equal(typeof r.account_id, 'number');
+    assert.equal(typeof r.personaname, 'string');
+    assert.ok(r.personaname.length > 0, 'a name must never be empty');
+  }
+});
+
+test('steam fixture commits no unused personal data', () => {
+  // The live endpoint also returns `friends` (1,000+ {account_id, friend_since}
+  // records across one roster), `realname` and `countrycode`. The overlay reads
+  // none of them, and committing them would put a social graph of third parties
+  // who were never in the match into git history permanently. The recorder
+  // projects the response; this stops that projection being dropped.
+  const allowed = new Set(['account_id', 'personaname', 'avatar', 'avatarmedium']);
+  for (const row of load('steam.sample.json')) {
+    for (const key of Object.keys(row)) {
+      assert.ok(allowed.has(key),
+        `steam fixture leaked "${key}" — the recorder must project to ${[...allowed].join(', ')}`);
+    }
+  }
+});
