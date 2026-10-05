@@ -145,19 +145,25 @@ export function mountChat(host, channel) {
     }
     line.appendChild(what);
     list.appendChild(line);
-    while (list.children.length > MAX_LINES) list.firstChild.remove();
+    while (list.children.length > MAX_LINES) list.firstElementChild.remove();
     // Newest at the bottom, as every chat client does.
     list.scrollTop = list.scrollHeight;
   };
 
   let socket = null;
   let retry = 1000;
+  let settled = null;        // clears the backoff once a connection holds
 
   const connect = () => {
     socket = new WebSocket(IRC);
 
     socket.addEventListener('open', () => {
-      retry = 1000;
+      // NOT reset here. A server that accepts and immediately drops would fire
+      // `open` every time, reset the backoff, and reconnect once a second for
+      // the whole broadcast. The backoff clears only once a connection has
+      // stayed up long enough to have been worth making.
+      clearTimeout(settled);
+      settled = setTimeout(() => { retry = 1000; }, 10000);
       // Tags carry display-name and colour; without the capability the
       // messages still arrive but render as flat lowercase logins.
       // tags carry display-name, colour, badges and emote ranges; commands is
@@ -189,6 +195,7 @@ export function mountChat(host, channel) {
     // A dropped socket mid-stream must not leave the rail frozen. Back off so a
     // sustained outage does not hammer Twitch.
     const reconnect = () => {
+      clearTimeout(settled);
       setTimeout(connect, retry);
       retry = Math.min(retry * 2, 30000);
     };

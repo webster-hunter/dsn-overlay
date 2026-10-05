@@ -295,6 +295,7 @@ function handleRequest(req, res) {
   // Static overlay files. Resolution lives in proxy/static.js so the traversal
   // test imports the real function rather than a hand-copied duplicate of it.
   const file = resolveStatic(url.pathname);
+  if (!file) return res.writeHead(404).end('not found');
   let stat;
   try {
     stat = statSync(file);

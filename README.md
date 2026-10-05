@@ -54,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 149 tests, no install step needed
+npm test          # 151 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -225,7 +225,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-149 tests across 21 files, run by `node --test`. The quoted glob in the script
+151 tests across 21 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:

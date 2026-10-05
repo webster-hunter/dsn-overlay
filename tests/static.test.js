@@ -98,3 +98,28 @@ test('normalize clamps .. at root — the property the guard leans on', () => {
   assert.equal(normalize('/../../../x'), sep + 'x');
   assert.equal(normalize('/a/../../x'), sep + 'x');
 });
+
+/**
+ * A colon in the path. On Windows this names an alternate data stream, and
+ * `/index.html::$DATA` resolved to the real index.html — but carrying the wrong
+ * extension, so extname() did not see it as code and the response was served
+ * `max-age=86400` instead of `no-store`. That is the stale-overlay bug the
+ * no-store header exists to prevent, reachable on the only platform this runs
+ * on, by appending six characters to the URL.
+ */
+test('a path containing a colon is rejected outright', () => {
+  for (const vector of ['/index.html::$DATA', '/index.html:stream',
+                        '/C:/Windows/win.ini', '/overlay/app.js::$DATA',
+                        '/app.js:', ':/index.html']) {
+    assert.equal(resolveStatic(vector), null,
+      `${vector} must not resolve to a servable path`);
+  }
+});
+
+test('the ordinary paths still resolve', () => {
+  // The guard must not have cost the thing the resolver is for.
+  assert.match(resolveStatic('/'), /index\.html$/);
+  assert.match(resolveStatic('/app.js'), /app\.js$/);
+  assert.match(resolveStatic('/logo/outer.svg'), /outer\.svg$/);
+  assert.match(resolveStatic('/heroes/20.webp'), /20\.webp$/);
+});

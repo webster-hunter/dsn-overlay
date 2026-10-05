@@ -131,15 +131,26 @@ export function renderTurn(state, turnIndex) {
   );
 
   const me = self(state);
+  // Optional all the way down. This was the one unguarded `state.session` read,
+  // and it sits outside the try/catch that protects turn.groups() — so a
+  // document without a session block took the whole chiron render with it,
+  // spine and groups included, not just this one unit.
   els.persistent.replaceChildren(
-    punit('Today', state.session.todayRecord ?? '-'),
+    punit('Today', state?.session?.todayRecord ?? '-'),
     punit('Rank', me?.rank ?? '-')
   );
 
   if (currentRow) {
     const old = currentRow;
     old.classList.add('out');
-    setTimeout(() => old.remove(), 440);
+    // Removed when the roll-out animation actually ends, not after a literal
+    // sized to guess at it: 440ms was hardcoded against `roll-out .42s`, so
+    // retuning the animation would either clip the exit or leave the old row in
+    // the DOM. The timer survives only as a floor, for the case where the event
+    // never arrives — the same failure waitAnim in machine.js guards against.
+    const drop = () => old.remove();
+    old.addEventListener('animationend', drop, { once: true });
+    setTimeout(drop, 2000);
   }
 
   const row = document.createElement('div');

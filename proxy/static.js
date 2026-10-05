@@ -16,6 +16,13 @@ const ROOT = 'overlay';
  * tests/static.test.js.
  */
 export function resolveStatic(pathname) {
+  // A colon has no business in a path under overlay/, and on Windows it opens
+  // two doors: an alternate data stream (`/index.html::$DATA`) and a drive
+  // letter. The ADS form resolved to the real index.html but carried the WRONG
+  // extension, so extname() did not recognise it as code and it was served
+  // `max-age=86400` instead of `no-store` — reintroducing the stale-overlay bug
+  // that the no-store header exists to fix, on the one platform this runs on.
+  if (pathname.includes(':')) return null;
   const rel = pathname === '/' ? '/index.html' : pathname;
   return join(ROOT, normalize(rel).replace(/^(\.\.[/\\])+/, ''));
 }
