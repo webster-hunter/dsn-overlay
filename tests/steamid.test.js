@@ -42,6 +42,30 @@ test('the base itself is not a valid account', () => {
   assert.equal(toAccountId(String(STEAM64_BASE)), 0);
 });
 
-test('a value too large for a 32-bit account id is rejected', () => {
-  assert.equal(toAccountId('999999999999999999999'), 0);
+test('a value too large for a 32-bit account id is rejected, in every form', () => {
+  // Was named this while asserting one input on the one branch that already
+  // clamped. The other two returned 1e+23 and 2e+23 — both truthy, so an
+  // unconfigured-looking proxy sailed past the "is it set" guard and sent real
+  // upstream requests built from a nonsense id.
+  const huge = '99999999999999999999999';
+  assert.equal(toAccountId(huge), 0, 'bare digits');
+  assert.equal(toAccountId('[U:1:' + huge + ']'), 0, 'SteamID3');
+  assert.equal(toAccountId('U:1:' + huge), 0, 'SteamID3, unbracketed');
+  assert.equal(toAccountId('STEAM_0:1:' + huge), 0, 'legacy');
+  assert.equal(toAccountId('STEAM_0:0:' + huge), 0, 'legacy, low bit clear');
+
+  // Exactly at the boundary, from both directions, so the bound is pinned
+  // rather than merely "a big number fails".
+  assert.equal(toAccountId('[U:1:4294967295]'), 4294967295, '2^32-1 is the last valid id');
+  assert.equal(toAccountId('[U:1:4294967296]'), 0, '2^32 is one too far');
+  assert.equal(toAccountId('[U:1:0]'), 0, 'zero is the unconfigured sentinel');
+});
+
+test('every real form of one account still converts to the same id', () => {
+  // The bound must not have cost the thing the function exists for. These are
+  // the four forms Steam shows for a single account.
+  const forms = ['123456788', '76561198083722516', '[U:1:123456788]', 'STEAM_0:0:61728394'];
+  for (const f of forms) {
+    assert.equal(toAccountId(f), 123456788, f + ' must resolve to the account id');
+  }
 });

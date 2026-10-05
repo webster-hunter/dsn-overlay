@@ -215,7 +215,36 @@ export async function doRefresh() {
  * for the rest of the broadcast. Every request routes through this one
  * function, so one try/catch at the root covers every thrower underneath it.
  */
+/**
+ * Loopback binding stops the network reaching this, but not a browser on this
+ * same machine. A page the streamer visits can point a hostname it controls at
+ * 127.0.0.1 and then fetch http://that-name:7331/state same-origin, which CORS
+ * does not prevent — CORS governs reading a cross-origin reply, and after the
+ * rebind the browser no longer considers it cross-origin. The reply carries the
+ * operator's account id, persona, rank and whether they are in a match.
+ *
+ * The request still has to name a host, and a rebound name is never one of
+ * these. There is no write path here, so this is the whole of the fix.
+ */
+const PORT_SUFFIX = new RegExp(':[0-9]+$');
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+function hostAllowed(header) {
+  if (!header) return false;                    // HTTP/1.1 requires Host
+  const text = String(header).toLowerCase();
+  // Drop a trailing :port. Bracketed IPv6 keeps its brackets, which is why
+  // both forms are in the set above.
+  const host = text.replace(PORT_SUFFIX, '');
+  return LOCAL_HOSTS.has(host);
+}
+
 function handleRequest(req, res) {
+  // Checked before anything else looks at the request, including the URL.
+  if (!hostAllowed(req.headers.host)) {
+    return res.writeHead(403, { 'content-type': 'text/plain' })
+      .end('dsn: this proxy serves localhost only');
+  }
+
   let url;
   try {
     url = new URL(req.url, `http://localhost:${PORT}`);

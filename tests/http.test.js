@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
 import { server } from '../proxy/server.js';
 
 /**
@@ -99,4 +100,65 @@ test('hero icons are served as webp, not as a generic byte stream', async () => 
   const res = await request('/heroes/20.webp');
   assert.equal(res.status, 200);
   assert.equal(res.headers['content-type'], 'image/webp');
+});
+
+/**
+ * DNS rebinding. Loopback binding keeps the network out but not a browser on
+ * this machine: a page can resolve a name it owns to 127.0.0.1 and then fetch
+ * /state same-origin, which CORS does not stop — after the rebind the browser
+ * does not consider it cross-origin. The reply carries the operator's account
+ * id, persona, rank and live-match status.
+ *
+ * The Host header is the one thing that still names the rebound hostname, so
+ * these pin both directions: a forged host is refused, and the hosts OBS and a
+ * developer actually use keep working.
+ */
+function requestWithHost(path, host) {
+  return new Promise((resolve, reject) => {
+    http.get({ hostname: '127.0.0.1', port, path, headers: { host } }, res => {
+      res.resume();
+      res.on('end', () => resolve({ status: res.statusCode }));
+    }).on('error', reject);
+  });
+}
+
+test('a forged Host is refused, so a rebound name cannot read /state', async () => {
+  for (const host of ['evil.example.com', 'attacker.test:7331', 'dsn.localtest.me:7331',
+                      'localhost.evil.com:7331', '127.0.0.1.evil.com']) {
+    const res = await requestWithHost('/state', host);
+    assert.equal(res.status, 403, `${host} must not reach /state`);
+  }
+});
+
+test('the hosts OBS and development actually use still work', async () => {
+  for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`,
+                      'localhost', '127.0.0.1']) {
+    const res = await requestWithHost('/state', host);
+    assert.equal(res.status, 200, `${host} is a real local host and must be served`);
+  }
+});
+
+test('a request with no Host at all is refused rather than defaulting to allowed', async () => {
+  // Written on a raw socket because Node's HTTP client substitutes a default
+  // Host when you try to omit it — the first version of this test was checking
+  // the client, not the server. HTTP/1.1 requires Host, so its absence is
+  // already malformed; the point is that the check fails closed rather than
+  // treating undefined as local.
+  const status = await new Promise((resolve, reject) => {
+    const socket = net.connect(port, '127.0.0.1', () => {
+      const CRLF = String.fromCharCode(13, 10);
+      socket.write(['GET /state HTTP/1.1', 'Connection: close', '', ''].join(CRLF));
+    });
+    let buf = '';
+    socket.on('data', c => { buf += c; });
+    socket.on('end', () => resolve(Number(buf.split(' ')[1])));
+    socket.on('error', reject);
+  });
+  // 400, not 403: Node's own HTTP server rejects a Host-less HTTP/1.1 request
+  // before any handler runs. That is a stricter outcome than the allowlist
+  // would give, so what is asserted is that the request is refused — pinning
+  // 403 here would pin Node's internals instead of this project's behaviour.
+  assert.ok(status === 400 || status === 403,
+    `a request with no Host must be refused, got ${status}`);
+  assert.notEqual(status, 200, 'it must never be served');
 });
