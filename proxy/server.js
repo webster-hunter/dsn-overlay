@@ -12,6 +12,9 @@ import {
 import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS } from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
+
+/** Served no-store so an edited overlay is never masked by a cached copy. */
+const CODE_EXT = new Set(['.html', '.js', '.css']);
 const matchCache = makeCache(MATCH_TTL_MS);
 
 // Resolved against this module, not the process cwd, so `npm run serve`
@@ -21,7 +24,7 @@ const FIXTURES = new URL('../fixtures/', import.meta.url);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
-  '.svg': 'image/svg+xml', '.otf': 'font/otf'
+  '.svg': 'image/svg+xml', '.otf': 'font/otf', '.webp': 'image/webp'
 };
 
 export let current = emptyState('starting');
@@ -140,7 +143,17 @@ function handleRequest(req, res) {
   // throws EISDIR. A directory is a legitimate 404, not a traversal escape.
   if (!stat.isFile()) return res.writeHead(404).end('not found');
 
-  res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+  // Overlay code changes every time the overlay is edited, and a response with
+  // no freshness information is left to the browser's heuristics — OBS's
+  // embedded Chromium will reuse it, which looks exactly like the edit not
+  // working. Vendored binaries only change via `npm run vendor`, so they stay
+  // cacheable; re-fetching 600KB of fonts on every reload would flash the
+  // fallback face.
+  const ext = extname(file);
+  res.writeHead(200, {
+    'content-type': MIME[ext] ?? 'application/octet-stream',
+    'cache-control': CODE_EXT.has(ext) ? 'no-store' : 'public, max-age=86400'
+  });
   res.end(readFileSync(file));
 }
 

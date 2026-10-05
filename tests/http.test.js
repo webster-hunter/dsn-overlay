@@ -77,3 +77,26 @@ test('a normal static asset and /fixture still work', async () => {
   const doc = JSON.parse(fixture.body);
   assert.equal(doc.teams.length, 2);
 });
+
+test('overlay code is served no-store, so an edit is never masked by a cache', async () => {
+  // A response with no freshness information is left to the browser's
+  // heuristics, and OBS's Chromium will reuse it — which presents as "my
+  // change did not work" long after the proxy has been restarted.
+  for (const path of ['/', '/app.js', '/overlay.css', '/tokens.css']) {
+    const res = await request(path);
+    assert.equal(res.status, 200, path);
+    assert.equal(res.headers['cache-control'], 'no-store', path);
+  }
+});
+
+test('vendored binaries stay cacheable, so reloads do not flash the fallback font', async () => {
+  const res = await request('/fonts/radiance-bold.otf');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['cache-control'] ?? '', /max-age=\d+/);
+});
+
+test('hero icons are served as webp, not as a generic byte stream', async () => {
+  const res = await request('/heroes/20.webp');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers['content-type'], 'image/webp');
+});
