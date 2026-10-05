@@ -114,7 +114,7 @@ export function renderTurn(state, turnIndex) {
   fourGroups(turn, state).forEach(([label, value, sub], i) => {
     const g = document.createElement('div');
     g.className = 'group' + (i === 0 ? ' lead' : '');
-    g.style.animationDelay = `${120 + i * 70}ms`;
+    g.style.animationDelay = `${25 + i * 38}ms`;   // early, so the rise is seen
     // textContent, not HTML interpolation: `label` carries Steam persona names
     // on the Matchup turn, and those are attacker-controlled by every player
     // in the match. See the security note in this task.

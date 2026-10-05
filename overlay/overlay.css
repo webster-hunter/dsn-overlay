@@ -185,7 +185,7 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
   position: absolute; inset: 0; display: flex; align-items: center; padding: 0 6px;
   transform: translateY(100%); opacity: 0;
 }
-.grouprow.in { animation: roll-in .5s cubic-bezier(.2,.9,.28,1) forwards; }
+.grouprow.in { animation: roll-in .5s cubic-bezier(.3,.55,.35,1) forwards; }
 .grouprow.out { animation: roll-out .42s cubic-bezier(.6,0,.75,.2) forwards; }
 @keyframes roll-in { to { transform: translateY(0); opacity: 1; } }
 @keyframes roll-out { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
@@ -193,8 +193,12 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .group {
   flex: 1; min-width: 0; padding: 0 16px; display: flex; flex-direction: column;
   justify-content: center; gap: 3px; border-left: 1px solid rgba(255,239,215,.09);
-  opacity: 0; transform: translateY(26%);
-  animation: group-in .36s cubic-bezier(.2,.9,.28,1) forwards;
+  /* The rise has to be visible, not just happen. Starting at 0 opacity with a
+     long delay meant the text only appeared once the row had already arrived,
+     so a new turn read as text swapping in place. It now fades in early and
+     carries most of the upward travel itself, against the departing row. */
+  opacity: 0; transform: translateY(85%);
+  animation: group-in .46s cubic-bezier(.22,.68,.3,1) forwards;
 }
 .group:first-child { border-left: none; }
 @keyframes group-in { to { opacity: 1; transform: translateY(0); } }
