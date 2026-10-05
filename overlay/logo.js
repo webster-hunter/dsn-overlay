@@ -29,15 +29,24 @@ export async function mountLogo(host) {
  * One 180 degree turn to mark a state boundary. Occludes nothing.
  * Cleanup rides the animation's own 'animationend' rather than a timer, so it
  * can never desync from --xition-sweep (tokens.css) however that is tuned.
+ * Also listens for 'animationcancel': removing the class to restart the
+ * sweep (above) interrupts any still-running animation, which fires cancel
+ * instead of end — without this the stale listener would never remove
+ * itself.
  */
 export function sweepLogo(mark) {
   if (!mark) return;
   mark.classList.remove('sweep');
   void mark.offsetWidth;            // force reflow so the animation restarts
   mark.classList.add('sweep');
-  mark.addEventListener('animationend', function onEnd(e) {
-    if (e.animationName !== 'mark-sweep') return;
-    mark.removeEventListener('animationend', onEnd);
-    mark.classList.remove('sweep');
-  });
+  mark.addEventListener('animationend', onSweepDone);
+  mark.addEventListener('animationcancel', onSweepDone);
+}
+
+function onSweepDone(e) {
+  if (e.animationName !== 'mark-sweep') return;
+  const mark = e.currentTarget;
+  mark.removeEventListener('animationend', onSweepDone);
+  mark.removeEventListener('animationcancel', onSweepDone);
+  mark.classList.remove('sweep');
 }

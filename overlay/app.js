@@ -18,11 +18,41 @@ mountMachine({ veil: el('veil'), ident: el('ident') });
 let state = null;
 let mode = 0, turn = 0;
 
+// The ident fully covers the frame only inside its full-cover plateau: the
+// mark's grow holds its peak 40–60%, the veil is opaque 34–62%, the ident
+// itself is opaque 20–78% (see the ident-* keyframes in overlay.css). Swap
+// the state at 40% through the token's live value, not a literal, so a
+// retuned --xition-ident can never desync the swap from the cover.
+const IDENT_SWAP_FRACTION = 0.4;
+
+function cssMs(name) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const n = parseFloat(v);
+  return v.endsWith('ms') ? n : n * 1000;
+}
+
+// setInterval does not await poll(), so a slow /state fetch or a 1.9s ident
+// (which blocks poll() for most of that span) could overlap a second poll
+// before the first finishes — mirrors the `refreshing` guard in
+// proxy/server.js, which solves the same overlapping-async-tick problem.
+let polling = false;
+
 async function poll() {
+  if (polling) return;
+  polling = true;
+  try {
+    await doPoll();
+  } finally {
+    polling = false;
+  }
+}
+
+async function doPoll() {
   let next;
   try {
     next = await fetch(SOURCE, { cache: 'no-store' }).then(r => r.json());
-  } catch {
+  } catch (err) {
+    console.warn('[app] /state fetch failed, keeping last frame', err);
     return;            // never render a hole: keep the last good document
   }
 
@@ -35,7 +65,7 @@ async function poll() {
       renderTurn(state, turn);
     };
     // the ident fully covers the frame, so swap under it at the peak
-    if (kind === 'ident') setTimeout(swap, 800); else swap();
+    if (kind === 'ident') setTimeout(swap, cssMs('--xition-ident') * IDENT_SWAP_FRACTION); else swap();
     await runTransition(kind, mark);
   } else if (!state) {
     state = next;

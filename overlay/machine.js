@@ -16,28 +16,51 @@ export function nextTransition(prev, next) {
   if (prev.phase === next.phase) return null;
 
   if (next.phase === 'MATCH') return 'sweep';
+
+  // queueing up or backing out of queue is the most frequent boundary in the
+  // cycle and is not match end — hard cut, per spec §6.5's "frequent" rule
+  if (prev.phase === 'IDLE' && next.phase === 'QUEUE') return null;
+  if (prev.phase === 'QUEUE' && next.phase === 'IDLE') return null;
+
   if (next.phase === 'RECAP' || next.phase === 'IDLE' || next.phase === 'QUEUE') return 'ident';
   return null;
+}
+
+/** Resolves on the first `animationend`/`animationcancel` for `name` on `el`. */
+function waitAnim(el, name) {
+  return new Promise(resolve => {
+    const done = e => {
+      if (e.animationName !== name) return;
+      el.removeEventListener('animationend', done);
+      el.removeEventListener('animationcancel', done);
+      resolve();
+    };
+    el.addEventListener('animationend', done);
+    el.addEventListener('animationcancel', done);
+  });
 }
 
 let els = null;
 
 export function mountMachine(refs) { els = refs; }
 
-/** Fires the chosen transition. Resolves when the screen is usable again. */
+/**
+ * Fires the chosen transition. Resolves when the screen is usable again.
+ * Resolution rides each animation's own end event rather than a timer sized
+ * to --xition-sweep/--xition-ident, so it can never desync from those tokens.
+ */
 export function runTransition(kind, mark) {
   if (kind === 'sweep') {
     sweepLogo(mark);
-    return new Promise(r => setTimeout(r, 1150));
+    return mark ? waitAnim(mark, 'mark-sweep') : Promise.resolve();
   }
   if (kind === 'ident' && els) {
     els.veil.classList.add('run');
     els.ident.classList.add('run');
-    return new Promise(r => setTimeout(() => {
+    return waitAnim(els.ident, 'ident-fade').then(() => {
       els.veil.classList.remove('run');
       els.ident.classList.remove('run');
-      r();
-    }, 1950));
+    });
   }
   return Promise.resolve();
 }
