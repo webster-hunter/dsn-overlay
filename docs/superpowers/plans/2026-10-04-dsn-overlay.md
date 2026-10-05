@@ -12,7 +12,15 @@
 
 ## Global Constraints
 
-- **Node 20+.** Required for stable `node:test` and global `fetch`.
+- **Node 20+.** Required for stable `node:test` and global `fetch`. Verified on v24.14.0.
+- **The test script must use a glob, not a directory:** `node --test "tests/**/*.test.js"`.
+  A bare `node --test tests/` is **broken on Node 24 / Windows** — it treats `tests`
+  as a single test file and reports a spurious failure. Verified by experiment:
+  the glob form discovers nested files, exits 0 on pass and 1 on failure, and
+  survives npm's shell quoting.
+- **OBS Studio 31.0 or newer.** Current stable (32.2.2) ships Chromium 127, which
+  covers every CSS feature this plan uses — `color-mix()` needs 111 and `:has()`
+  needs 105, so older OBS builds would render the faction bands invisible.
 - **Zero runtime dependencies.** `package.json` must have no `dependencies` field. Dev-only tooling is also disallowed — Node's built-ins cover testing.
 - **`"type": "module"`** in `package.json`. All JS is ESM; no `require`.
 - **The overlay must never call `api.deadlock-api.com`.** Only `proxy/deadlock.js` performs outbound requests to it.
@@ -104,7 +112,7 @@ fixtures/
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test \"tests/**/*.test.js\"",
     "tokens": "node scripts/tokens.mjs",
     "vendor": "node scripts/vendor.mjs",
     "serve": "node proxy/server.js"
