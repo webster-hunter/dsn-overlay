@@ -13,16 +13,16 @@ mkdirSync('fixtures', { recursive: true });
 /**
  * Everything written to fixtures/ goes through here.
  *
- * The committed fixtures are a real match, which means twelve real people's
- * account ids and persona names. Projecting the fields down (below) removed the
- * social graph but kept the identities, and these files are committed — so they
- * are anonymised at the write boundary instead. One place, so a later re-record
- * cannot quietly put real people back into git history.
+ * These are recordings of a real account, so they carry a real person's id and
+ * persona name, and they are committed. Projecting the fields down removes the
+ * social graph but keeps the identity, so the identity is replaced here instead
+ * — at the write boundary, one place, so a later re-record cannot quietly put a
+ * real person back into git history.
  *
- * Ids are remapped consistently across all four files, because the state
- * builder joins the roster to steam, rank and history on account_id. Stats,
- * ranks, heroes, teams and timestamps are untouched: they are what the fixtures
- * exist to exercise, and none of them identifies anyone on their own.
+ * Ids are remapped consistently across the three files, because the state
+ * builder joins steam, rank and history on account_id. Stats, ranks, heroes and
+ * timestamps are untouched: they are what the fixtures exist to exercise, and
+ * none of them identifies anyone on their own.
  */
 const accounts = new Map();
 const matches = new Map();
@@ -68,44 +68,40 @@ function writeSample(name, data) {
 
 
 
-// 1. a live match, for the roster shape
+// An account to record from. /matches/active is only used to find one — the
+// fixtures no longer need a roster, so nothing from the match itself is kept.
 const active = await get('/matches/active');
-const match = active.find(m => m.players?.length === 12);
-if (!match) throw new Error('no 12-player match in the active list right now; retry');
-writeSample('active.sample.json', match);
-console.log('active.sample.json      match', matches.get(match.match_id), '(anonymised)');
+const subject = active.find(m => m.players?.length)?.players?.[0]?.account_id;
+if (!subject) throw new Error('no active match to pick an account from; retry');
 
-const ids = match.players.map(p => p.account_id);
-
-// 2 + 3. batch profile and rank for that roster.
+// ONE account, not twelve. The fixtures used to carry a full 12-player roster
+// because the overlay rendered one; nothing does now, and recording eleven more
+// people's profiles to use one of them is data this project has no reason to
+// hold. See the anonymisation note above — that covers what is kept, this
+// covers what is never fetched.
 //
-// The steam endpoint returns far more than the overlay consumes: `friends`
-// (an array of {account_id, friend_since} — over a thousand records across a
-// single roster), plus `realname` and `countrycode`. None of it is read by any
-// code in this project, and committing it would put a social graph of ~1,000
-// third parties who were never in the match into git history permanently.
-// So project down to exactly the fields the overlay uses.
-// The board shows hero icons now, so avatars are not rendered anywhere and
-// are no longer recorded. `personaname` stays: the chiron's Matchup turn
-// still names opponents.
+// The steam endpoint returns far more than the overlay consumes: `friends` (an
+// array of {account_id, friend_since}, over a thousand records for one
+// account), plus `realname` and `countrycode`. None of it is read, so the
+// response is projected down to the two fields that are.
 const STEAM_FIELDS = ['account_id', 'personaname'];
+const RANK_FIELDS = ['account_id', 'badge', 'rank', 'subrank'];
 const pick = (row, fields) =>
   Object.fromEntries(fields.filter(f => f in row).map(f => [f, row[f]]));
 
-const steamRaw = await get(`/players/steam?account_ids=${ids.join(',')}`);
+const steamRaw = await get(`/players/steam?account_ids=${subject}`);
 writeSample('steam.sample.json', steamRaw.map(r => pick(r, STEAM_FIELDS)));
 
 // rank carries no personal data beyond the id, but `last_match` is a large
 // nested object the fixtures never read.
-const RANK_FIELDS = ['account_id', 'badge', 'rank', 'subrank'];
-const rankRaw = await get(`/players/rank?account_ids=${ids.join(',')}`);
+const rankRaw = await get(`/players/rank?account_ids=${subject}`);
 writeSample('rank.sample.json', rankRaw.map(r => pick(r, RANK_FIELDS)));
 
-console.log(`steam/rank.sample.json  12 players (projected to `
+console.log(`steam/rank.sample.json   1 account (projected to `
           + `${STEAM_FIELDS.length}/${RANK_FIELDS.length} fields)`);
 
-// 4. one player's history, down-sampled but keeping every abandon
-const subject = ids[0];
+// The history, down-sampled but keeping every abandon — abandonCount has a
+// 0-sentinel bug that only a real abandon catches.
 const full = await get(`/players/${subject}/match-history`);
 const abandons = full.filter(r => typeof r.abandoned_time_s === 'number' && r.abandoned_time_s > 0);
 const recent = full

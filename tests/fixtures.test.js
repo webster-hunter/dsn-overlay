@@ -28,10 +28,16 @@ test('match-history fixture abandon coverage (informational)', () => {
   assert.ok(Array.isArray(rows), 'fixture parses');
 });
 
-test('active fixture carries a 12-player roster', () => {
-  const m = load('active.sample.json');
-  assert.equal(m.players.length, 12);
-  for (const f of ['account_id', 'team', 'hero_id']) assert.ok(f in m.players[0]);
+test('the fixtures carry one account, not a roster', () => {
+  // They used to hold a full 12-player match because the overlay rendered one.
+  // Nothing does — the API cannot report a live roster and no turn shows
+  // opponents — so recording eleven more people to use one of them was data
+  // this project had no reason to hold. The roster sample is gone with it.
+  assert.throws(() => load('active.sample.json'),
+    'active.sample.json must not come back: nothing reads a roster');
+  for (const f of ['steam.sample.json', 'rank.sample.json']) {
+    assert.equal(load(f).length, 1, `${f} should describe one account`);
+  }
 });
 
 test('rank fixture carries tier and subrank', () => {
@@ -40,9 +46,9 @@ test('rank fixture carries tier and subrank', () => {
   assert.equal(typeof r.subrank, 'number');
 });
 
-test('steam fixture carries what the board renders', () => {
+test('steam fixture carries what the chiron renders', () => {
   const rows = load('steam.sample.json');
-  assert.equal(rows.length, 12);
+  assert.equal(rows.length, 1);
   for (const r of rows) {
     assert.equal(typeof r.account_id, 'number');
     assert.equal(typeof r.personaname, 'string');
@@ -52,10 +58,10 @@ test('steam fixture carries what the board renders', () => {
 
 test('steam fixture commits no unused personal data', () => {
   // The live endpoint also returns `friends` (1,000+ {account_id, friend_since}
-  // records across one roster), `realname` and `countrycode`. The overlay reads
-  // none of them, and committing them would put a social graph of third parties
-  // who were never in the match into git history permanently. The recorder
-  // projects the response; this stops that projection being dropped.
+  // records for one account), `realname` and `countrycode`. The overlay reads
+  // none of them, and committing them would put a social graph of a thousand
+  // third parties into git history permanently. The recorder projects the
+  // response; this stops that projection being dropped.
   const allowed = new Set(['account_id', 'personaname']);
   for (const row of load('steam.sample.json')) {
     for (const key of Object.keys(row)) {

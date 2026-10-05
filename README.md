@@ -276,11 +276,15 @@ no small icon, so that path is real rather than theoretical.
 npm run fixtures   # re-records fixtures/ from live API responses
 ```
 
-`npm run fixtures` projects the Steam response down to the two fields the
-overlay actually reads — an account id and a persona name, the latter only
-because the chiron names opponents. The live endpoint also returns `realname`,
-`countrycode`, avatar URLs and a `friends` array of ~1,000 third parties who
-were never in your match — none of which this project commits.
+`npm run fixtures` records **one** account, and anonymises it on the way to
+disk. It used to record a full 12-player match because the overlay rendered a
+roster; nothing does now, so recording eleven more people to use one of them is
+data this project has no reason to hold.
+
+It also projects the Steam response down to the two fields actually read — an
+account id and a persona name. The live endpoint returns `realname`,
+`countrycode`, avatar URLs and a `friends` array of ~1,000 third parties as
+well; none of it is committed.
 
 ---
 
