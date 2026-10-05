@@ -38,7 +38,7 @@ function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal')
   const ranked = (rk?.rank ?? 0) > 0;
   return {
     accountId: p.account_id,
-    // A private profile or an omitted batch row must not blank the board.
+    // A private profile or an omitted batch row must not blank the chiron.
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
     heroId: p.hero_id ?? null,
     isSelf: operatorId > 0 && p.account_id === operatorId,

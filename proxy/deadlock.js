@@ -54,12 +54,6 @@ export function matchHistory(accountId) {
   return get(`/players/${accountId}/match-history`);
 }
 
-/** 60 req/60s. vars is an array of names from /v1/commands/variables/available. */
-export function resolveCommands(accountId, vars) {
-  const q = new URLSearchParams({ account_id: String(accountId), query: vars.join(',') });
-  return get(`/commands/resolve?${q}`);
-}
-
 /**
  * Map ids through fn with bounded concurrency. Twelve histories total ~18.5MB;
  * pulling them all at once would hold that in memory and compete with the
@@ -77,7 +71,7 @@ export async function mapLimited(ids, fn, limit = HISTORY_CONCURRENCY) {
       } catch (err) {
         // Isolate the failure — one bad history must not lose the other eleven —
         // but do not swallow it silently, or a null is indistinguishable from a
-        // genuinely empty history when the board shows that row as zeroes.
+        // genuinely empty history when the chiron shows those stats as zeroes.
         console.error(`[mapLimited] ${id} failed: ${err.message}`);
         out.set(id, null);
       }

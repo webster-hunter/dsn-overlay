@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 /**
  * `npm run tokens` regenerates overlay/tokens.css from the Deadlock palette
@@ -68,9 +68,14 @@ test('every static token the committed file carries is also emitted', () => {
 test('no token survives in the generator with nothing left to read it', () => {
   // The split-flap board was deleted; its tokens went with it. A token the
   // generator still emits but no rule or script reads is the next --flap-cell-w.
-  const sources = ['overlay/overlay.css', 'overlay/app.js', 'overlay/chiron.js',
-                   'overlay/logo.js', 'overlay/chat.js', 'overlay/emotes.js']
-    .map(f => readFileSync(f, 'utf8')).join('\n');
+  // Enumerated, not listed. A hardcoded list silently stops covering a new file
+  // the moment one is added — this one had already drifted, omitting
+  // machine.js. tests/injection.test.js reads the directory for the same reason.
+  const sources = readdirSync('overlay')
+    .filter(f => f.endsWith('.js') || f.endsWith('.css'))
+    .filter(f => f !== 'tokens.css')               // the generated file itself
+    .map(f => readFileSync(`overlay/${f}`, 'utf8'))
+    .join('\n');
 
   const unread = [...generator.keys()].filter(name =>
     !sources.includes(`var(${name})`) &&

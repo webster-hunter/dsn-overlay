@@ -44,7 +44,7 @@ match end, when you are on a scoreboard anyway.
 | | |
 |---|---|
 | **Node.js** | 20 or newer (developed on 24) |
-| **OBS Studio** | **31.0 or newer** — its embedded Chromium 127 is required for `color-mix()` and `:has()`. Older OBS renders the faction colour bands *invisible, with no error.* |
+| **OBS Studio** | 31.0 or newer recommended — that is what this was built and verified against. The stylesheet uses nothing newer than `aspect-ratio` for layout, and its one recent property (`scrollbar-width`) sits beside a `::-webkit-scrollbar` fallback, so older OBS is likely fine. Untested there, not unsupported. |
 | **Dependencies** | None. Zero runtime dependencies, no build step, no bundler. |
 
 ---
@@ -54,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 142 tests, no install step needed
+npm test          # 149 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -191,8 +191,16 @@ at `/state` first.
 | `/state` | the live state document the overlay renders |
 | `/fixture` | the same document built from `fixtures/` |
 
-The server binds **loopback only** (`127.0.0.1`) and serves no CORS headers.
-It is not reachable from your network.
+The server binds **loopback only** (`127.0.0.1`) and serves no CORS headers,
+so nothing on your network can reach it.
+
+A browser on your own machine is the one reader loopback does not exclude, and
+CORS does not cover it: a page can point a hostname it controls at `127.0.0.1`
+and then read `/state` as same-origin. So requests are also refused unless the
+`Host` header names a real local host — `localhost`, `127.0.0.1` or `[::1]`.
+`/state` carries your account id, persona, rank and whether you are in a match,
+and there is no write path, so this is a privacy boundary rather than a way to
+tamper with the broadcast.
 
 ---
 
@@ -217,7 +225,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-142 tests across 20 files, run by `node --test`. The quoted glob in the script
+149 tests across 21 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -388,7 +396,7 @@ see actually started, in the `Matches` qualifier — `19h ago`, `12m ago`,
 
 That one line answers the question this section raises. Finish a game, and if
 it still reads `3h ago` a minute later, the match has not reached the API yet
-and every history-derived number on the board is from before it — which is
+and every history-derived number on screen is from before it — which is
 exactly how you tell whether `deadlock-api-ingest` is doing its job.
 
 It is carried even on a day with no matches, because that is when it matters
@@ -424,11 +432,13 @@ match, and the active-match feed is not guaranteed to report one.
 - **`TEAM0_IS_AMBER` is an unverified assumption.** `proxy/config.js` maps team
   0 to amber / Hidden King. Confirm it against one real match before trusting
   the faction labels — if it is backwards, both team names are swapped.
-- **The Session chiron turn renders dashes.** Session-tier stats need
-  `/v1/commands/resolve`, which is implemented and tested but not yet wired.
-  The other four turns are fully populated.
+- **Today's numbers are empty until you play.** The Session turn derives from
+  match history rather than a session endpoint — `/v1/commands/resolve` serves
+  `text/plain` and returned an empty body for every query tried, so it is not
+  used. Before the day's first match it therefore shows dashes, with the
+  freshness line below saying how long ago the last one was.
 - **A lost feed is not captioned.** If the proxy loses the API mid-match it
-  keeps serving the last good document rather than blanking the board, and
+  keeps serving the last good document rather than blanking the overlay, and
   nothing says which feed dropped — `stale` and `reason` are on the document
   for the logs, deliberately unrendered, because a real broadcast does not
   caption its own plumbing. The *age* of the data is shown instead, which

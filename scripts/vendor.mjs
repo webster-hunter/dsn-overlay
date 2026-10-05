@@ -36,10 +36,13 @@ for (const f of FONTS) await grab(FONT_BASE + f, `overlay/fonts/${f}`);
 console.log('logo layers:');
 for (const [dest, src] of Object.entries(LOGO)) await grab(LOGO_BASE + src, `overlay/logo/${dest}`);
 
-// Hero icons, named by hero id so the overlay needs no manifest: the board
-// renders heroes/<heroId>.webp directly. Only heroes that actually ship a
-// small icon are vendored; a hero without one falls back to the empty plate
-// styled in overlay.css, which is why the board never renders a hole.
+// Hero icons, named by hero id so a renderer needs no manifest — it can resolve
+// heroes/<heroId>.webp directly.
+//
+// Nothing renders them at present. The split-flap board was their only consumer
+// and it is gone; they are kept because the chiron's Hero turn still prints a
+// raw `Hero 20`, and these are what should replace it. Only heroes that ship a
+// small icon are vendored, so a renderer must expect a miss and fall back.
 const HEROES_URL = 'https://api.deadlock-api.com/v1/assets/heroes';
 const heroes = await (await fetch(HEROES_URL)).json();
 const withIcon = heroes.filter(h => !h.disabled && h.images?.icon_image_small_webp);

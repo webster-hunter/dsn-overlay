@@ -126,7 +126,7 @@ export function abandonCount(entries, countable = isCountable) {
 /**
  * The FORM column: the last n scored results, newest first, as 'W'/'L'.
  * Short histories are padded with spaces so the string is always exactly n
- * characters — the board's cell count is fixed and must not be fed a short
+ * characters — the chiron's Form group is a fixed width and must not be fed a short
  * string.
  */
 export function form(entries, n = 11, scored = isScored) {
@@ -152,7 +152,7 @@ export function streak(entries, isScoredFn = isScored) {
 
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 // Countable-only: a Street Brawl round lasts minutes and has its own net-worth
-// scale, so including one would skew every average on the board.
+// scale, so including one would skew every average in the chiron.
 const nums = (entries, field, countable = isCountable) =>
   (entries ?? []).filter(countable).map(en => en?.[field]).filter(v => typeof v === 'number');
 
@@ -172,7 +172,7 @@ export function averages(entries, countable = isCountable) {
   };
 }
 
-/** Everything the board and the free stat tier need, from one history array. */
+/** Everything the chiron's turns need, from one history array. */
 /**
  * Everything the chiron's Session turn needs, derived from the match history we
  * already fetch.

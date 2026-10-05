@@ -65,8 +65,8 @@ async function refresh() {
 /**
  * Idle does not mean empty. Four of the chiron's five turns are about the
  * operator rather than the match, so between games we still build their row —
- * record, form, abandons, K/D — and leave `teams` empty, because the board and
- * the Matchup turn genuinely need opponents.
+ * record, form, abandons, K/D — and leave `teams` empty, because only the
+ * Matchup turn genuinely needs opponents.
  *
  * A failure here must not escalate: the overlay showing dashes is the normal
  * idle look, so a bad fetch falls back to the plain idle document.
