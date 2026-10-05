@@ -174,7 +174,8 @@ if (isMain) {
       console.warn('  !! DSN_ACCOUNT_ID is not set. /state will stay IDLE and no');
       console.warn('     live match will be detected. Use /fixture to develop the');
       console.warn('     overlay without a game running.');
-      console.warn('     Set it to your SteamID3 numeric part, e.g.');
+      console.warn('     Copy .env.example to .env and set your SteamID3 numeric');
+      console.warn('     part, or pass it for one run:');
       console.warn('       DSN_ACCOUNT_ID=123456789 npm run serve');
       console.warn('');
     }

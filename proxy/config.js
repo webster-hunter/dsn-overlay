@@ -1,6 +1,13 @@
 /** Operator identity and tunables. This is the only file a second user edits. */
+import { loadEnv } from './env.js';
 
-// SteamID3. Find yours at https://steamid.io — the "steamID3" value's numeric part.
+// Read .env from the repo root before anything below reads process.env.
+// Resolved against this module, not the working directory, so the proxy picks
+// it up however it is launched. A real environment variable still wins.
+loadEnv(new URL('../.env', import.meta.url));
+
+// SteamID3. Find yours at https://steamid.io — the "steamID3" value's numeric
+// part. Set it in .env (see .env.example) or pass it in the environment.
 export const ACCOUNT_ID = Number(process.env.DSN_ACCOUNT_ID ?? 0);
 
 /**

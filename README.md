@@ -17,7 +17,7 @@ split-flap stat board and a news-ticker chiron around your gameplay.
 │                                                │  ARCHMOTHER  │
 │                                                │    11 flaps  │
 ├──────┬─────────────────────────────────────────┴──────────────┤
-│ logo │  DEADLOCK · Session   TODAY   K/D   MATCHES   RANK      │
+│ logo │  DEADLOCK · Session   TODAY   K/D   MATCHES   RANK     │
 └──────┴────────────────────────────────────────────────────────┘
   1920 × 1080 — rail 403px, chiron 135px
 ```
@@ -55,29 +55,47 @@ npm run serve     # starts the proxy on http://localhost:7331
 
 There is no `npm install` — the project has no dependencies.
 
-### 2. Find your account id
+### 2. Set your account id
 
-The proxy needs `DSN_ACCOUNT_ID`: the numeric part of your SteamID3, written
-`[U:1:` **N** `]`. If you know your 64-bit id instead:
+Copy the example file and fill in your id:
+
+```bash
+cp .env.example .env
+```
+
+```ini
+# .env
+DSN_ACCOUNT_ID=123456789
+```
+
+`DSN_ACCOUNT_ID` is the numeric part of your SteamID3, written `[U:1:` **N** `]`
+— steamid.io shows it as "steamID3". If you only have the 64-bit id:
 
 ```
 account_id = steamid64 − 76561197960265728
 ```
 
-### 3. Run it with your id
+`.env` is gitignored, so your id stays out of version control. It is read
+relative to the repo, so it applies however you start the proxy — `npm run
+serve` or `node proxy/server.js` from anywhere.
+
+A real environment variable still wins, which is handy for a one-off:
 
 ```bash
-# bash / git bash
-DSN_ACCOUNT_ID=123456789 npm run serve
-
-# PowerShell
-$env:DSN_ACCOUNT_ID = "123456789"; npm run serve
+DSN_ACCOUNT_ID=987654321 npm run serve      # bash / git bash
+$env:DSN_ACCOUNT_ID = "987654321"; npm run serve   # PowerShell
 ```
 
-Without it the proxy starts, warns, and `/state` stays `IDLE` forever. **This
-is deliberate, not a bug.** The upstream endpoint ignores a zero account id and
-returns *every* active match, so an unconfigured proxy would happily broadcast
-a stranger's game to your stream.
+Without an id the proxy starts, warns, and `/state` stays `IDLE` forever.
+**This is deliberate, not a bug.** The upstream endpoint ignores a zero account
+id and returns *every* active match, so an unconfigured proxy would happily
+broadcast a stranger's game to your stream.
+
+### 3. Start it
+
+```bash
+npm run serve
+```
 
 ### 4. Add it to OBS
 
@@ -209,7 +227,7 @@ Environment:
 
 | Variable | Default | |
 |---|---|---|
-| `DSN_ACCOUNT_ID` | `0` | your SteamID3 numeric part; required for live data |
+| `DSN_ACCOUNT_ID` | `0` | your SteamID3 numeric part; required for live data. Set in `.env` (see `.env.example`) or the environment, which takes precedence. |
 | `PORT` | `7331` | |
 
 Tunables live in `proxy/config.js` — poll interval, cache TTLs, history
