@@ -52,10 +52,28 @@ test('emote URLs are built from a fixed base and a validated id', () => {
   }
 });
 
-test('chat.js sets img.src only from the emote URL builders', () => {
-  const src = readFileSync('overlay/chat.js', 'utf8');
-  for (const assign of src.match(/\.src\s*=\s*[^;]+;/g) ?? []) {
-    assert.match(assign, /part\.url/,
-      `img.src must come from tokenise(), not from a message: ${assign}`);
-  }
-});
+/**
+ * Every `src` assignment anywhere in overlay/, not just chat's.
+ *
+ * Enumerated for the same reason the sink tests above are: the chat rail was
+ * the project's first URL sink, the chiron's hero icon is the second, and a
+ * hardcoded file list would not have noticed the second one arrive.
+ *
+ * The rule a grep can actually enforce is that no URL is CONSTRUCTED at the
+ * assignment site — no template literal, no concatenation. Every src must be a
+ * value a builder already returned, and each builder carries its own test that
+ * it validates its id (heroIconUrl in tests/chiron.test.js, the two emote
+ * builders in tests/chat.test.js). Taint analysis is beyond a regex; forbidding
+ * string-building where the sink is, is not.
+ */
+for (const name of readdirSync('overlay').filter(f => f.endsWith('.js'))) {
+  test(`overlay/${name} never builds a URL at the src assignment`, () => {
+    const src = readFileSync(`overlay/${name}`, 'utf8');
+    for (const assign of src.match(/\.src\s*=\s*[^;]+;/g) ?? []) {
+      assert.doesNotMatch(assign, /[`]/,
+        `a template literal in a src assignment builds a URL in place: ${assign}`);
+      assert.doesNotMatch(assign, /\+/,
+        `concatenation in a src assignment builds a URL in place: ${assign}`);
+    }
+  });
+}

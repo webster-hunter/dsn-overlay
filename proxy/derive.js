@@ -243,6 +243,25 @@ export function lastPlayedMode(entries) {
 }
 
 /**
+ * Which hero the player most recently picked, by id.
+ *
+ * The chiron shows a hero icon, and `hero_id` on the state document only has a
+ * value during a match — which, with no live roster available, is almost never.
+ * Without this the Hero turn would sit on a dash permanently. Mode-agnostic on
+ * purpose: the last hero you played is the last hero you played, whichever
+ * queue it was in.
+ */
+export function lastHero(entries) {
+  let best = null;
+  for (const en of entries ?? []) {
+    if (!isCountable(en) && !isBrawl(en)) continue;
+    if (!Number.isInteger(en.hero_id)) continue;
+    if (!best || (en.start_time ?? 0) > (best.start_time ?? 0)) best = en;
+  }
+  return best ? best.hero_id : null;
+}
+
+/**
  * Normal-mode stats stay at the top level so every existing consumer is
  * untouched; brawl rides alongside. Both are always present, so the UI can
  * switch between them without another fetch.
@@ -251,6 +270,7 @@ export function derivePlayer(entries) {
   return {
     ...deriveMode(entries, isCountable),
     brawl: deriveMode(entries, isBrawl),
-    lastMode: lastPlayedMode(entries)
+    lastMode: lastPlayedMode(entries),
+    lastHero: lastHero(entries)
   };
 }

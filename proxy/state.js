@@ -11,7 +11,8 @@ const EMPTY_DERIVED = {
   abandons: 0,
   streak: { kind: null, n: 0 },
   averages: { kd: 0, netWorth: 0, lastHits: 0, denies: 0, matchLen: 0 },
-  matches: 0
+  matches: 0,
+  lastHero: null
 };
 
 function indexBy(rows, key) {
@@ -41,6 +42,11 @@ function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal')
     // A private profile or an omitted batch row must not blank the chiron.
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
     heroId: p.hero_id ?? null,
+    // Kept separate from heroId rather than folded into it: one is the hero
+    // being played right now, the other the last one played at all. The chiron
+    // prefers the live value and falls back, but the document does not lie
+    // about which it has.
+    lastHero: all.lastHero ?? null,
     isSelf: operatorId > 0 && p.account_id === operatorId,
     form: d.form,
     season: d.season.text,

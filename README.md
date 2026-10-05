@@ -29,9 +29,9 @@ space.
 **Five regions.** A thin bar across the top carries your name and tagline.
 Gameplay shows through a fully transparent area. The right rail carries an
 optional facecam above **Twitch chat**, rendered in Deadlock's own type (see
-*Twitch chat* below). The chiron along the bottom rolls through five themed
-turns. A layered Deadlock mark sits in the chiron's left bay and turns one
-notch on each chiron turn.
+*Twitch chat* below). The chiron along the bottom rolls through four themed
+turns, all of them about the streamer rather than the match. A layered Deadlock
+mark sits in the chiron's left bay and turns one notch on each chiron turn.
 
 **Two transitions.** A logo *sweep* (1.1s) marks a match starting — it occludes
 nothing, so it is safe over live play. An *ident* (1.9s) covers the frame at
@@ -54,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 151 tests, no install step needed
+npm test          # 164 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -225,7 +225,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-151 tests across 21 files, run by `node --test`. The quoted glob in the script
+164 tests across 22 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -260,11 +260,14 @@ npm run tokens     # regenerates overlay/tokens.css from /v1/assets/colors
 npm run vendor     # re-downloads fonts, the three logo layers and 39 hero icons
 ```
 
-The 39 hero icons are **currently vendored but unrendered.** They were the
-split-flap board's player identity, and that board is gone. They are kept
-because the chiron's Hero turn still prints `Hero 15` — a raw id, which is the
-weakest text on the broadcast — and these icons are what should replace it.
-`overlay/heroes/<id>.webp`, resolved by hero id with no manifest.
+The chiron's Hero turn renders these, resolved as `overlay/heroes/<id>.webp`
+with no manifest needed. It shows the hero you are playing, or the last one you
+played when no match is running.
+
+`npm run vendor` also writes `overlay/heroes.js`, a generated id-to-name map.
+Those names are what the icon says when it cannot be seen — its alt text, and
+the text shown instead for a hero with no vendored icon. Five live heroes ship
+no small icon, so that path is real rather than theoretical.
 
 ```bash
 npm run fixtures   # re-records fixtures/ from live API responses
@@ -429,9 +432,11 @@ match, and the active-match feed is not guaranteed to report one.
 
 ## Known limitations
 
-- **`TEAM0_IS_AMBER` is an unverified assumption.** `proxy/config.js` maps team
-  0 to amber / Hidden King. Confirm it against one real match before trusting
-  the faction labels — if it is backwards, both team names are swapped.
+- **No live roster, by design.** The API cannot report the players in your
+  current match (see *Live match detection*), and reaching them would mean
+  parsing a Source 2 broadcast. So every chiron turn is about you, drawn from
+  your own match history. The game log supplies the match *phase*, which is what
+  fires the transitions.
 - **Today's numbers are empty until you play.** The Session turn derives from
   match history rather than a session endpoint — `/v1/commands/resolve` serves
   `text/plain` and returned an empty body for every query tried, so it is not

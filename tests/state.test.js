@@ -67,7 +67,7 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
   const row = all.find(p => p.accountId === victim);
   assert.equal(row.name, 'UNKNOWN');
   assert.equal(row.rank, 'UNRANKED');
-  assert.equal(row.form.length, 11, 'FORM still fills the board');
+  assert.equal(row.form.length, 11, 'FORM is a fixed width and must still fill it');
 });
 
 test('a player whose history fetch failed entirely still renders', () => {
@@ -83,14 +83,28 @@ test('a player whose history fetch failed entirely still renders', () => {
   assert.equal(all.length, 12, 'the row must survive a missing derived entry');
 
   const row = all.find(p => p.accountId === victim);
-  assert.equal(row.form.length, 11, 'FORM still fills the board');
+  assert.equal(row.form.length, 11, 'FORM is a fixed width and must still fill it');
   assert.equal(row.season, '0-0');
   assert.equal(row.abandons, '0');
   assert.equal(row.matches, '0');
   assert.equal(row.streak, '0');
   assert.ok(row.name.length > 0, 'the name comes from steam, not from history');
-  assert.doesNotMatch(JSON.stringify(row), /NaN|undefined|null/,
-    'the catastrophic path must not leak NaN into the document');
+  // Checked field by field, not against the serialised blob. The old regex
+  // banned the substrings "null"/"undefined" anywhere in the JSON, which also
+  // outlawed a field whose value is legitimately null — `lastHero` on an
+  // account with no history is exactly that, and so is `heroId` on any idle
+  // document. What must never happen is a value RENDERED as the text "NaN" or
+  // "undefined", because that is what reaches the broadcast.
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null) continue;                       // an honest "no data"
+    assert.notEqual(value, undefined, `${key} must not be undefined`);
+    assert.ok(typeof value !== 'number' || Number.isFinite(value),
+      `${key} is ${value}, which renders as its own name`);
+    if (typeof value === 'string') {
+      assert.doesNotMatch(value, /NaN|undefined/,
+        `${key} = "${value}" would put that word on the broadcast`);
+    }
+  }
 });
 
 test('a player with no history at all still renders', () => {

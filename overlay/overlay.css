@@ -187,6 +187,19 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .group.lead .gvalue { color: var(--color-gold); }
 .gsub { font-size: 15px; color: #8A8071; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* The hero icon occupies the value row, so it is sized to that row's 32px type
+   rather than to a figure of its own — the group keeps its height whichever
+   turn is showing, and an icon that fails to load leaves text of the same size
+   behind. */
+.gvalue.hero { display: flex; align-items: center; min-height: 34px; }
+.hero-icon {
+  height: 34px; width: 34px; object-fit: contain; display: block;
+  /* Valve's icons are near-white line art on transparency; this seats them in
+     the chiron's palette instead of glowing against it. */
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.5));
+}
+.group.lead .gvalue.hero { color: var(--color-gold); }
+
 #persistent {
   flex: none; display: flex; gap: 14px; align-items: center; padding: 0 15px;
   border-left: 1px solid #453D2E; background: rgba(0,0,0,.22);

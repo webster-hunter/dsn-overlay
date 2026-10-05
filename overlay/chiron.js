@@ -1,3 +1,5 @@
+import { heroName } from './heroes.js';
+
 /**
  * How long ago the newest match the API could tell us about actually started.
  *
@@ -36,7 +38,10 @@ export const TURNS = [
   { spine: 'Hero', sub: 'Form', groups: s => {
     const me = self(s);
     return [
-      ['Hero',     `Hero ${me?.heroId ?? '-'}`, `${me?.matches ?? 0} matches`],
+      // An icon, not a number. `Hero 20` was the only place a raw database id
+      // reached the screen. The descriptor rather than a string because the
+      // value is an image here; renderTurn is what knows how to draw one.
+      ['Hero',     { heroId: me?.heroId ?? me?.lastHero ?? null }, `${me?.matches ?? 0} matches`],
       ['Season',   me?.season ?? '-',           ''],
       ['K / D',    me?.kd ?? '-',               ''],
       ['Streak',   me?.streak ?? '-',           '']
@@ -50,10 +55,6 @@ export const TURNS = [
       ['Last hits',me?.lastHits ?? '-',   'average'],
       ['Denies',   me?.denies ?? '-',     'average']
     ];
-  } },
-  { spine: 'Matchup', sub: 'Lane', groups: s => {
-    const them = s.teams[1]?.players ?? [];
-    return them.slice(0, 4).map(p => [p.name.slice(0, 14), p.season, p.rank]);
   } },
   { spine: 'Records', sub: 'Watch', groups: s => {
     const me = self(s);
@@ -74,6 +75,41 @@ export const TURNS = [
 // between matches as well as during one — searching the roster only found them
 // while a game was running, which is exactly when the streamer is not looking.
 const self = s => s?.operator ?? null;
+
+/**
+ * The local path for a hero's icon, or null.
+ *
+ * A builder rather than an inline template so the rule is checkable: the id is
+ * validated as a small positive integer before it can reach an `src`, exactly
+ * as emotes.js does for the two chat CDNs. Nothing the API returns as a string
+ * ever lands in a URL.
+ */
+export const heroIconUrl = id =>
+  Number.isInteger(id) && id > 0 && id < 1_000_000 ? `heroes/${id}.webp` : null;
+
+/**
+ * The hero as its icon, with its name as what the image says when it cannot be
+ * shown — alt text, and the text that replaces it outright when the icon is not
+ * vendored. Five live heroes ship no small icon, so that path is real.
+ */
+function heroPlate(heroId) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gvalue hero';
+  const url = heroIconUrl(heroId);
+  const label = heroName(heroId);
+  if (!url) {
+    wrap.textContent = label ?? '-';
+    return wrap;
+  }
+  const img = document.createElement('img');
+  img.className = 'hero-icon';
+  img.src = url;
+  img.alt = label ?? `Hero ${heroId}`;
+  img.addEventListener('error', () =>
+    wrap.replaceChildren(document.createTextNode(img.alt)));
+  wrap.appendChild(img);
+  return wrap;
+}
 
 /**
  * Element builders. These exist so no API-sourced string is ever parsed as
@@ -162,7 +198,12 @@ export function renderTurn(state, turnIndex) {
     // textContent, not HTML interpolation: `label` carries Steam persona names
     // on the Matchup turn, and those are attacker-controlled by every player
     // in the match. See the security note in this task.
-    g.append(div('glabel', label), div('gvalue', value));
+    // A group's value is text, or a hero-icon descriptor. Anything else would
+    // be stringified into the DOM, so the shape is checked, not assumed.
+    const cell = value && typeof value === 'object' && 'heroId' in value
+      ? heroPlate(value.heroId)
+      : div('gvalue', value);
+    g.append(div('glabel', label), cell);
     if (sub) g.appendChild(div('gsub', sub));
     row.appendChild(g);
   });
