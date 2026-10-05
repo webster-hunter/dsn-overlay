@@ -46,9 +46,12 @@ test('results are sorted by descending salience', () => {
 });
 
 test('a longer streak is more salient than a shorter one', () => {
+  // Both W8 and W4 clear streak's minSample of 3, so this compares two
+  // eligible salience scores against each other, not an eligible score
+  // against the find() ?? 0 fallback for an excluded one.
   const find = (st, key) => rankStats(st).find(s => s.key === key)?.salience ?? 0;
-  assert.ok(find(stateWith({ streak: 'W6' }), 'streak')
-          > find(stateWith({ streak: 'W2' }), 'streak'));
+  assert.ok(find(stateWith({ streak: 'W8' }), 'streak')
+          > find(stateWith({ streak: 'W4' }), 'streak'));
 });
 
 test('an empty or malformed state yields no stats rather than throwing', () => {

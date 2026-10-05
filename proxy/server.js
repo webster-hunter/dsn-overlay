@@ -101,7 +101,7 @@ const server = createServer((req, res) => {
       steam: JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8')),
       ranks: JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8')),
       derived: new Map(match.players.map(p => [p.account_id, stats])),
-      operatorId: ACCOUNT_ID
+      operatorId: ACCOUNT_ID || match.players[0].account_id
     });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));
