@@ -186,8 +186,8 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
   justify-content: center; gap: 2px;
   border-right: 1px solid #453D2E; background: rgba(0,0,0,.16);
 }
-.spine-sub { font-size: 12px; letter-spacing: .15em; text-transform: uppercase; color: #BFA06A; font-weight: 800; }
-.spine-title { font-family: "Reaver", "Radiance", sans-serif; font-weight: 700; font-size: 17px; color: var(--color-gold); line-height: 1.05; }
+.spine-sub { font-size: 14px; letter-spacing: .15em; text-transform: uppercase; color: #BFA06A; font-weight: 800; }
+.spine-title { font-family: "Reaver", "Radiance", sans-serif; font-weight: 700; font-size: 21px; color: var(--color-gold); line-height: 1.05; }
 
 /* The rows roll in from +100% and out to -100%, so without clipping here the
    outgoing row travels up out of the chiron and over live gameplay. */
@@ -213,18 +213,18 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 }
 .group:first-child { border-left: none; }
 @keyframes group-in { to { opacity: 1; transform: translateY(0); } }
-.glabel { font-size: 12px; letter-spacing: .15em; text-transform: uppercase; color: #BFA06A; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 600; font-size: 23px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.glabel { font-size: 16px; letter-spacing: .13em; text-transform: uppercase; color: #BFA06A; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 600; font-size: 32px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .group.lead .gvalue { color: var(--color-gold); }
-.gsub { font-size: 12px; color: #8A8071; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsub { font-size: 15px; color: #8A8071; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 #persistent {
   flex: none; display: flex; gap: 14px; align-items: center; padding: 0 15px;
   border-left: 1px solid #453D2E; background: rgba(0,0,0,.22);
 }
 .punit { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.plabel { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #BFA06A; font-weight: 800; }
-.pvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 700; font-size: 21px; color: var(--color-gold); line-height: 1; }
+.plabel { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: #BFA06A; font-weight: 800; }
+.pvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 700; font-size: 26px; color: var(--color-gold); line-height: 1; }
 
 /* --- eye ident: the mark grows out of the bay, the eye shuts, it recedes --- */
 #veil.run { animation: ident-veil var(--xition-ident) ease-in-out; }

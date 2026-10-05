@@ -195,7 +195,10 @@
   --rail-width: 320px;
   --topbar-height: 45px;
   --chiron-height: 135px;
-  --logo-bay-width: 211px;
+  /* Square: the mark is square, so matching the chiron's 132px content height
+     gives it even 13px padding on all four sides and hands 79px of what was
+     dead horizontal padding back to the stat groups. */
+  --logo-bay-width: 132px;
   --row-height: 48px;
   --name-size: 14px;
   --name-floor: 8px;
