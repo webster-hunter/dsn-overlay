@@ -1,5 +1,6 @@
 import { rankLabel, tierColor } from './rank.js';
 import { FACTIONS, TEAM0_IS_AMBER } from './config.js';
+import { rankStats } from './registry.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
 
@@ -57,7 +58,7 @@ export function emptyState(reason = '') {
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
       { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: [] }
     ],
-    session: {}, generatedAt: Date.now()
+    session: {}, salient: [], generatedAt: Date.now()
   };
 }
 
@@ -81,7 +82,7 @@ export function buildState({
     bucket[side].sort((a, b) => Number(b.isSelf) - Number(a.isSelf));
   }
 
-  return {
+  const doc = {
     phase: 'MATCH',
     matchId: match.match_id ?? null,
     factions: FACTIONS,
@@ -89,6 +90,10 @@ export function buildState({
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: bucket.amber },
       { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: bucket.sapphire }
     ],
-    session, generatedAt: now
+    session,
+    generatedAt: now,
+    salient: []
   };
+  doc.salient = rankStats(doc);
+  return doc;
 }
