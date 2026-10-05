@@ -28,7 +28,10 @@ const ids = match.players.map(p => p.account_id);
 // code in this project, and committing it would put a social graph of ~1,000
 // third parties who were never in the match into git history permanently.
 // So project down to exactly the fields the overlay uses.
-const STEAM_FIELDS = ['account_id', 'personaname', 'avatar', 'avatarmedium'];
+// The board shows hero icons now, so avatars are not rendered anywhere and
+// are no longer recorded. `personaname` stays: the chiron's Matchup turn
+// still names opponents.
+const STEAM_FIELDS = ['account_id', 'personaname'];
 const pick = (row, fields) =>
   Object.fromEntries(fields.filter(f => f in row).map(f => [f, row[f]]));
 

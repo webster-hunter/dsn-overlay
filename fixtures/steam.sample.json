@@ -1,74 +1,50 @@
 [
   {
     "account_id": 900000008,
-    "personaname": "Pennyroyal",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000015.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000016_medium.jpg"
+    "personaname": "Pennyroyal"
   },
   {
     "account_id": 900000005,
-    "personaname": "Clementine",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000009.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000010_medium.jpg"
+    "personaname": "Clementine"
   },
   {
     "account_id": 900000003,
-    "personaname": "Deepwater",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000011.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000012_medium.jpg"
+    "personaname": "Deepwater"
   },
   {
     "account_id": 900000006,
-    "personaname": "Trenchcoat",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000017.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000018_medium.jpg"
+    "personaname": "Trenchcoat"
   },
   {
     "account_id": 900000001,
-    "personaname": "Sorrel",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000005.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000006_medium.jpg"
+    "personaname": "Sorrel"
   },
   {
     "account_id": 900000002,
-    "personaname": "Fathom",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000003.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000004_medium.jpg"
+    "personaname": "Fathom"
   },
   {
     "account_id": 900000012,
-    "personaname": "Harrier",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000021.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000022_medium.jpg"
+    "personaname": "Harrier"
   },
   {
     "account_id": 900000010,
-    "personaname": "Mossy",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000001.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000002_medium.jpg"
+    "personaname": "Mossy"
   },
   {
     "account_id": 900000004,
-    "personaname": "Quietly",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000019.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000020_medium.jpg"
+    "personaname": "Quietly"
   },
   {
     "account_id": 900000007,
-    "personaname": "Pylon",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000007.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000008_medium.jpg"
+    "personaname": "Pylon"
   },
   {
     "account_id": 900000011,
-    "personaname": "Saltmarsh",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000023.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000024_medium.jpg"
+    "personaname": "Saltmarsh"
   },
   {
     "account_id": 900000009,
-    "personaname": "Ivorybill",
-    "avatar": "https://avatars.steamstatic.com/0000000000000000000000000000000000000013.jpg",
-    "avatarmedium": "https://avatars.steamstatic.com/0000000000000000000000000000000000000014_medium.jpg"
+    "personaname": "Ivorybill"
   }
 ]

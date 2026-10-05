@@ -56,7 +56,7 @@ test('steam fixture commits no unused personal data', () => {
   // none of them, and committing them would put a social graph of third parties
   // who were never in the match into git history permanently. The recorder
   // projects the response; this stops that projection being dropped.
-  const allowed = new Set(['account_id', 'personaname', 'avatar', 'avatarmedium']);
+  const allowed = new Set(['account_id', 'personaname']);
   for (const row of load('steam.sample.json')) {
     for (const key of Object.keys(row)) {
       assert.ok(allowed.has(key),

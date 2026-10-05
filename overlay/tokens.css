@@ -203,10 +203,14 @@
   /* --- flap, from spec section 5.3 --- */
   --flap-cells: 11;
   --flap-head: 8;
-  --flap-cell-w: 15px;
-  --flap-cell-h: 20px;
-  --flap-type: 12px;
-  --flap-seam: 1.2px;
+  /* 318 rail inner - 18 row padding - 28 hero icon - 8 gap - 11 cell margins
+     = 264 for the board, which at a 2px gap is 22px per cell. The board carries
+     the player's identity now that the name column is gone, so it gets the
+     whole width. */
+  --flap-cell-w: 22px;
+  --flap-cell-h: 30px;
+  --flap-type: 18px;
+  --flap-seam: 1.8px;
   --flap-seam-op: 0.34;
 
   /* --- chiron, from spec section 6.1 --- */

@@ -1,5 +1,4 @@
 import { makeFlapRow, setFlapRow } from './flap.js';
-import { fitSize, canvasMeasurer } from './fit.js';
 
 export const MODES = [
   { key: 'form',     label: 'FORM',     tint: () => ({ kind: 'form' }) },
@@ -10,16 +9,11 @@ export const MODES = [
 
 const CELLS = 11;
 const HEAD = 8;
-const NAME_COL = 86;    // 318 rail inner - 67 chrome - 165 cells (11 x 15).
-                        // Tight by design: the rail was cut back to give the
-                        // gameplay a true 16:9, and long Steam names truncate.
 
-let measure = null;
 let headRow = null;
-const rows = [];        // { player, nameEl, flapRow }
+const rows = [];        // { player, flapRow }
 
 export function mountBoard(boardEl, headEl) {
-  measure ??= canvasMeasurer();
   headRow = makeFlapRow(HEAD);
   headEl.replaceChildren(headRow);
   boardEl.replaceChildren();
@@ -40,26 +34,18 @@ function rowEl(player) {
   const row = document.createElement('div');
   row.className = 'prow' + (player.isSelf ? ' me' : '');
 
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  if (player.avatar) avatar.style.backgroundImage = `url(${JSON.stringify(player.avatar)})`;
-
-  const names = document.createElement('div');
-  names.className = 'names';
-  const name = document.createElement('div');
-  name.className = 'name';
-  name.textContent = player.name;
-  name.style.fontSize = `${fitSize(player.name, NAME_COL, measure)}px`;
-  const sub = document.createElement('div');
-  sub.className = 'sub';
-  sub.textContent = `Hero ${player.heroId ?? '-'}`;
-  names.append(name, sub);
+  // A hero icon, not a Steam name: it is how you actually identify someone in
+  // the match, it never truncates, and dropping the name column let the flap
+  // cells grow from 15px to 23px. Heroes without a vendored icon fall through
+  // to the plate styled in overlay.css rather than leaving a hole.
+  const hero = document.createElement('div');
+  hero.className = 'hero';
+  if (player.heroId != null) {
+    hero.style.backgroundImage = `url(${JSON.stringify(`heroes/${player.heroId}.webp`)})`;
+  }
 
   const flapRow = makeFlapRow(CELLS);
-  // No "YOU" tag: the row is already marked three ways (gold left border, amber
-  // wash, gold name) and at this rail width the tag halved the name column on
-  // the one row that matters most.
-  row.append(avatar, names, flapRow);
+  row.append(hero, flapRow);
   rows.push({ player, flapRow });
   return row;
 }

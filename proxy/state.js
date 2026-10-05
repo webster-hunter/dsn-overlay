@@ -36,7 +36,6 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
     accountId: p.account_id,
     // A private profile or an omitted batch row must not blank the board.
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
-    avatar: prof?.avatarmedium ?? prof?.avatar ?? null,
     heroId: p.hero_id ?? null,
     isSelf: operatorId > 0 && p.account_id === operatorId,
     form: d.form,
