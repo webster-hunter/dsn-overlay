@@ -1,4 +1,4 @@
-import { mountLogo } from './logo.js';
+import { mountLogo, turnLogo } from './logo.js';
 import { mountBoard, renderBoard, showMode } from './board.js';
 import { mountChiron, renderTurn } from './chiron.js';
 import { mountMachine, nextTransition, runTransition } from './machine.js';
@@ -80,4 +80,4 @@ async function doPoll() {
 await poll();
 setInterval(poll, POLL_MS);
 setInterval(() => { if (state) showMode(++mode); }, 9000);
-setInterval(() => { if (state) renderTurn(state, ++turn); }, 9000);
+setInterval(() => { if (!state) return; renderTurn(state, ++turn); turnLogo(mark); }, 9000);

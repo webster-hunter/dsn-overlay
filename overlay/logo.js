@@ -26,6 +26,41 @@ export async function mountLogo(host) {
 }
 
 /**
+ * The mark's resting angle. Both kinds of movement advance it rather than
+ * rotating from zero, so the mark carries on from wherever it stopped instead
+ * of snapping back between turns.
+ */
+function advance(mark, degrees) {
+  const now = parseFloat(mark.style.getPropertyValue('--mark-turn')) || 0;
+  mark.style.setProperty('--mark-turn', `${now + degrees}deg`);
+}
+
+/**
+ * One notch, fired when the chiron turns. The mark does not rotate passively —
+ * it moves only when something else on screen moves, which lets the browser
+ * source idle in between. --mark-step x 10 chiron turns is a full revolution,
+ * i.e. the same 90s cadence the old continuous spin had.
+ */
+export function turnLogo(mark) {
+  if (!mark) return;
+  const step = parseFloat(getComputedStyle(mark).getPropertyValue('--mark-step')) || 36;
+  advance(mark, step);
+  mark.classList.remove('turn');
+  void mark.offsetWidth;            // force reflow so the animation restarts
+  mark.classList.add('turn');
+  mark.addEventListener('animationend', onTurnDone);
+  mark.addEventListener('animationcancel', onTurnDone);
+}
+
+function onTurnDone(e) {
+  if (e.animationName !== 'mark-turn') return;
+  const mark = e.currentTarget;
+  mark.removeEventListener('animationend', onTurnDone);
+  mark.removeEventListener('animationcancel', onTurnDone);
+  mark.classList.remove('turn');
+}
+
+/**
  * One 180 degree turn to mark a state boundary. Occludes nothing.
  * Cleanup rides the animation's own 'animationend' rather than a timer, so it
  * can never desync from --xition-sweep (tokens.css) however that is tuned.
@@ -36,6 +71,7 @@ export async function mountLogo(host) {
  */
 export function sweepLogo(mark) {
   if (!mark) return;
+  advance(mark, 180);
   mark.classList.remove('sweep');
   void mark.offsetWidth;            // force reflow so the animation restarts
   mark.classList.add('sweep');

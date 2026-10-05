@@ -210,7 +210,12 @@
 
   /* --- logo + transitions, from spec sections 6.4 and 6.5 --- */
   --mark-color: #FFEFD7;
-  --mark-rev: 90s;
+  /* The mark steps one notch per chiron turn instead of spinning passively.
+     36deg x 10 turns = 360deg, and at the chiron's 9s hold that is one
+     revolution per 90s - the same cadence as the old --mark-rev: 90s spin,
+     but driven by events so the browser source can idle between them. */
+  --mark-step: 36deg;
+  --mark-turn-dur: .5s;
   --mark-blink: 10s;
   --xition-sweep: 1.1s;
   --xition-ident: 1.9s;

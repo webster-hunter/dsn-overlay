@@ -73,16 +73,23 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .mark .layer svg { width: 100%; height: 100%; display: block; }
 .mark .layer path { fill: currentColor; }
 .mark .outer, .mark .eye { transform-origin: 50% 50%; }
-.mark .outer { animation: mark-spin var(--mark-rev) linear infinite; }
+.mark .outer { transform: rotate(var(--mark-turn, 0deg)); }
+.mark.turn .outer { animation: mark-turn var(--mark-turn-dur) cubic-bezier(.3,.02,.2,1); }
 .mark .eye { animation: mark-blink var(--mark-blink) ease-in-out infinite; }
-@keyframes mark-spin { to { transform: rotate(360deg); } }
+@keyframes mark-turn {
+  from { transform: rotate(calc(var(--mark-turn, 0deg) - var(--mark-step))); }
+  to   { transform: rotate(var(--mark-turn, 0deg)); }
+}
 @keyframes mark-blink {
   0%, 94%, 100% { transform: scaleY(1); }
   96.5% { transform: scaleY(.06); }
 }
 /* one deliberate half-turn, for a state change */
 .mark.sweep .outer { animation: mark-sweep var(--xition-sweep) cubic-bezier(.3,.02,.2,1); }
-@keyframes mark-sweep { from { transform: rotate(0); } to { transform: rotate(180deg); } }
+@keyframes mark-sweep {
+  from { transform: rotate(calc(var(--mark-turn, 0deg) - 180deg)); }
+  to   { transform: rotate(var(--mark-turn, 0deg)); }
+}
 
 /* --- board --- */
 .band {
