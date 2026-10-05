@@ -18,6 +18,22 @@ export const TEAM0_IS_AMBER = true;
 export const FACTIONS = { amber: 'Hidden King', sapphire: 'Archmother' };
 
 export const POLL_MS = 15_000;          // match detection
-export const MATCH_TTL_MS = 6 * 60_000; // roster is immutable after start
+
+/**
+ * Longer than any plausible match, deliberately.
+ *
+ * NOTHING in the state document changes while a match runs: the roster is
+ * fixed at start, names and ranks only move between matches, and the current
+ * match is not in anyone's history yet. So a mid-match expiry buys no fresh
+ * data and costs a full 17-call, 18.5 MB re-assembly. At the original 6 minutes
+ * a 35-minute match re-assembled five or six times — roughly 100 calls and
+ * 111 MB for data that could not have changed, against a stated constraint of
+ * "fetch once per match, never poll".
+ *
+ * The TTL survives only to bound memory across a long session (one small entry
+ * per match_id), not to refresh anything. Match END is detected by the 15s
+ * poll of /matches/active, not by this expiring.
+ */
+export const MATCH_TTL_MS = 90 * 60_000;
 export const CONTEXT_TTL_MS = 60 * 60_000;
 export const HISTORY_CONCURRENCY = 3;   // 12 x 2.5MB; do not fetch in parallel

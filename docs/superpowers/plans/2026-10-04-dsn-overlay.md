@@ -1543,7 +1543,6 @@ function indexBy(rows, key) {
 }
 
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
-const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 function playerRow(p, steamById, rankById, derived, operatorId) {
   const prof = steamById.get(p.account_id);
@@ -1594,10 +1593,11 @@ export function buildState({
   const rankById = indexBy(ranks, 'account_id');
 
   const amberIdx = TEAM0_IS_AMBER ? 0 : 1;
+  const stats = derived ?? new Map();
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map(), operatorId));
+    bucket[side].push(playerRow(p, steamById, rankById, stats, operatorId));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {
@@ -1646,6 +1646,29 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
   assert.equal(row.rank, 'UNRANKED');
   assert.match(row.rankColor, /^#[0-9A-F]{6}$/i, 'a colour is still required');
   assert.equal(row.form.length, 11, 'FORM still fills the board');
+});
+
+test('a player whose history fetch failed entirely still renders', () => {
+  // mapLimited maps a failed per-item fetch to null, so that account never
+  // reaches the derived map at all — a different case from "fetched, but
+  // empty". EMPTY_DERIVED exists for exactly this, and nothing exercised it.
+  const victim = match.players[7].account_id;
+  const partial = new Map(fullDerived);
+  partial.delete(victim);
+
+  const s = buildState({ match, steam, ranks, derived: partial, session: {}, now: 1 });
+  const all = s.teams.flatMap(t => t.players);
+  assert.equal(all.length, 12, 'the row must survive a missing derived entry');
+
+  const row = all.find(p => p.accountId === victim);
+  assert.equal(row.form.length, 11, 'FORM still fills the board');
+  assert.equal(row.season, '0-0');
+  assert.equal(row.abandons, '0');
+  assert.equal(row.matches, '0');
+  assert.equal(row.streak, '0');
+  assert.ok(row.name.length > 0, 'the name comes from steam, not from history');
+  assert.doesNotMatch(JSON.stringify(row), /NaN|undefined|null/,
+    'the catastrophic path must not leak NaN into the document');
 });
 
 test('a player with no history at all still renders', () => {
@@ -1763,7 +1786,26 @@ let current = emptyState('starting');
 
 /** Fetch and reduce. Raw histories are discarded immediately — 12 x 2.5MB
  *  must never all be held at once. */
+/**
+ * Guards against overlapping refreshes. setInterval does not await, so if one
+ * run exceeds POLL_MS (15s) a second would start before the cache is written —
+ * two concurrent 17-call, 18.5MB assemblies writing the same key. Measured
+ * assembly is 2.4s, but the slowest single history was 1,448ms, so a slow API
+ * or a network stall can cross 15s.
+ */
+let refreshing = false;
+
 async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    await doRefresh();
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function doRefresh() {
   // An unconfigured ACCOUNT_ID is 0, and /v1/matches/active IGNORES a falsy
   // account_id filter — it returns the whole 150-match watch list. Polling
   // unguarded would pick a stranger's match, fetch twelve strangers' histories
