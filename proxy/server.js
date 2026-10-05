@@ -200,7 +200,12 @@ function handleRequest(req, res) {
       steam: JSON.parse(readFileSync(new URL('steam.sample.json', FIXTURES), 'utf8')),
       ranks: JSON.parse(readFileSync(new URL('rank.sample.json', FIXTURES), 'utf8')),
       derived: new Map(match.players.map(p => [p.account_id, stats])),
-      operatorId: ACCOUNT_ID || match.players[0].account_id
+      operatorId: ACCOUNT_ID || match.players[0].account_id,
+      // Without this the Session turn is dead in the only development path,
+      // which is where it gets looked at. The recorded history is old, so this
+      // exercises the honest case: no matches today, and a freshness age that
+      // says how long ago the newest one was.
+      session: sessionToday(history, startOfToday())
     });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));
