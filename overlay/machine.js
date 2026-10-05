@@ -17,12 +17,13 @@ export function nextTransition(prev, next) {
 
   if (next.phase === 'MATCH') return 'sweep';
 
-  // queueing up or backing out of queue is the most frequent boundary in the
-  // cycle and is not match end — hard cut, per spec §6.5's "frequent" rule
-  if (prev.phase === 'IDLE' && next.phase === 'QUEUE') return null;
-  if (prev.phase === 'QUEUE' && next.phase === 'IDLE') return null;
-
-  if (next.phase === 'RECAP' || next.phase === 'IDLE' || next.phase === 'QUEUE') return 'ident';
+  // Full occlusion belongs to match end: leaving MATCH or RECAP always gets
+  // the ident, regardless of what phase comes next — that's the boundary
+  // the spec reserves full cover for. Everything else (e.g. IDLE<->QUEUE,
+  // the most frequent boundary in the whole cycle) falls out as a hard cut,
+  // per spec §6.5's "frequent is the default" rule, with no pair-by-pair
+  // special-casing needed.
+  if (prev.phase === 'MATCH' || prev.phase === 'RECAP') return 'ident';
   return null;
 }
 
