@@ -80,12 +80,19 @@ DSN_STREAMER_NAME=Your Name
 DSN_STREAMER_TAGLINE=twitch.tv/you · live weeknights
 ```
 
-`DSN_ACCOUNT_ID` is the numeric part of your SteamID3, written `[U:1:` **N** `]`
-— steamid.io shows it as "steamID3". If you only have the 64-bit id:
+`DSN_ACCOUNT_ID` accepts **any** Steam identifier for your account. Steam shows
+different ones on different pages, so paste whichever you have:
 
-```
-account_id = steamid64 − 76561197960265728
-```
+| What you might have | Example |
+|---|---|
+| Friend Code (in your Steam profile) | `900000008` |
+| SteamID64 (the number in a profile URL) | `76561198083722516` |
+| SteamID3 (steamid.io calls it this) | `[U:1:900000008]` |
+| Legacy SteamID | `STEAM_0:0:61728394` |
+
+They all refer to the same account and all convert to the one the Deadlock API
+wants. **On startup the proxy prints the account id it resolved** — if that
+line is missing, it did not understand what you pasted and will tell you so.
 
 `.env` is gitignored, so your id stays out of version control. It is read
 relative to the repo, so it applies however you start the proxy — `npm run

@@ -169,14 +169,28 @@ if (isMain) {
     console.log(`  overlay   http://localhost:${PORT}/`);
     console.log(`  state     http://localhost:${PORT}/state`);
     console.log(`  fixture   http://localhost:${PORT}/fixture   (no game needed)`);
-    if (!ACCOUNT_ID) {
+    if (ACCOUNT_ID) {
+      // Echo what it resolved to: the operator may have pasted a SteamID64 or
+      // a [U:1:...] form, and seeing the account id confirms it was understood.
+      console.log(`  account   ${ACCOUNT_ID}`);
+    } else {
+      const given = (process.env.DSN_ACCOUNT_ID ?? '').trim();
       console.warn('');
-      console.warn('  !! DSN_ACCOUNT_ID is not set. /state will stay IDLE and no');
-      console.warn('     live match will be detected. Use /fixture to develop the');
-      console.warn('     overlay without a game running.');
-      console.warn('     Copy .env.example to .env and set your SteamID3 numeric');
-      console.warn('     part, or pass it for one run:');
-      console.warn('       DSN_ACCOUNT_ID=123456789 npm run serve');
+      if (given) {
+        // Distinct from "not set": they did set one, it just wasn't readable.
+        console.warn(`  !! DSN_ACCOUNT_ID is set to ${JSON.stringify(given)}, which is not a`);
+        console.warn('     Steam identifier this understands. Accepted forms:');
+        console.warn('       900000008            Friend Code / account id');
+        console.warn('       76561198083722516     SteamID64, from a profile URL');
+        console.warn('       [U:1:900000008]      SteamID3');
+        console.warn('       STEAM_0:0:61728394   legacy SteamID');
+      } else {
+        console.warn('  !! DSN_ACCOUNT_ID is not set. Copy .env.example to .env and');
+        console.warn('     paste any Steam identifier for your account — Friend Code,');
+        console.warn('     SteamID64, [U:1:...] or STEAM_0:... all work.');
+      }
+      console.warn('     /state will stay IDLE and no live match will be detected.');
+      console.warn('     Use /fixture to develop the overlay without a game running.');
       console.warn('');
     }
   });

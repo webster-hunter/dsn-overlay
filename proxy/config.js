@@ -1,14 +1,17 @@
 /** Operator identity and tunables. This is the only file a second user edits. */
 import { loadEnv } from './env.js';
+import { toAccountId } from './steamid.js';
 
 // Read .env from the repo root before anything below reads process.env.
 // Resolved against this module, not the working directory, so the proxy picks
 // it up however it is launched. A real environment variable still wins.
 loadEnv(new URL('../.env', import.meta.url));
 
-// SteamID3. Find yours at https://steamid.io — the "steamID3" value's numeric
-// part. Set it in .env (see .env.example) or pass it in the environment.
-export const ACCOUNT_ID = Number(process.env.DSN_ACCOUNT_ID ?? 0);
+// Any Steam identifier: the Friend Code from Steam's own UI, a 17-digit
+// SteamID64 from a profile URL, [U:1:...] or legacy STEAM_0:... — they all
+// normalise to the 32-bit account id the Deadlock API wants. Unrecognised
+// input resolves to 0, which keeps the proxy idle rather than guessing.
+export const ACCOUNT_ID = toAccountId(process.env.DSN_ACCOUNT_ID);
 
 /**
  * What the top bar shows. Set in .env so there is one place a user edits.
