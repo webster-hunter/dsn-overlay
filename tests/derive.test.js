@@ -204,14 +204,22 @@ test('sessionToday counts only matches started since the boundary', () => {
   assert.equal(out.rankProgress, '+6');    // 12 + -6, and signed
 });
 
-test('a day with no matches yields {} so the turn shows dashes, not zeroes', () => {
+test('a day with no matches claims no stat, so the turn shows dashes not zeroes', () => {
   // Zeroes would assert "you went 0-0 today"; absent data must read as absent.
+  // Asserted field by field rather than as deepEqual({}): the block also
+  // carries freshness metadata, which is not a stat and must not be mistaken
+  // for one. Every name here is a field the chiron reads.
+  const STATS = ['todayRecord', 'winRateToday', 'kd', 'matches', 'rankProgress'];
   const old = { start_time: Math.floor((Date.now() - 40 * 3600e3) / 1000),
                 game_mode: 1, match_mode: 1, player_team: 0, match_result: 0 };
   const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-  assert.deepEqual(sessionToday([old], midnight.getTime()), {});
-  assert.deepEqual(sessionToday([], midnight.getTime()), {});
-  assert.deepEqual(sessionToday(null, midnight.getTime()), {});
+  for (const history of [[old], [], null]) {
+    const out = sessionToday(history, midnight.getTime());
+    for (const stat of STATS) {
+      assert.equal(out[stat], undefined,
+        `${stat} must be absent, not zero, for ${JSON.stringify(history)}`);
+    }
+  }
 });
 
 test('normal and brawl are derived separately from one history', () => {

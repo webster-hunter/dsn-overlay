@@ -1,9 +1,32 @@
+/**
+ * How long ago the newest match the API could tell us about actually started.
+ *
+ * Recomputed on every render from a timestamp rather than printed once by the
+ * proxy, which is what makes it useful twice over: it exposes ingestion lag
+ * (finish a game, and if this still reads "3h ago" the match has not landed
+ * upstream yet) and it exposes a frozen document, because a board the proxy has
+ * stopped updating keeps aging on screen instead of sitting there looking live.
+ *
+ * Returns '' when there is nothing to date, so the qualifier slot stays empty
+ * rather than reading "NaN ago" on a cold start.
+ */
+export function ageLabel(at, now = Date.now()) {
+  if (typeof at !== 'number' || !(at > 0)) return '';
+  const mins = Math.floor((now - at) / 60000);
+  if (mins < 0) return '';                       // clock skew: say nothing
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 /** Five themed turns, spec section 6.2. Each picks 4 groups from the state. */
 export const TURNS = [
   { spine: 'Session', sub: 'Deadlock', groups: s => [
     ['Today',      s.session.todayRecord ?? '-', s.session.winRateToday ?? ''],
     ['K / D',      s.session.kd ?? '-',          ''],
-    ['Matches',    s.session.matches ?? '-',     ''],
+    ['Matches',    s.session.matches ?? '-',     ageLabel(s.session.lastMatchAt)],
     ['Rank',       s.session.rank ?? '-',         s.session.rankProgress ?? '']
   ] },
   { spine: 'Hero', sub: 'Form', groups: s => {

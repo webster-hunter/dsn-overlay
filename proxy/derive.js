@@ -79,6 +79,29 @@ export function isAbandon(entry) {
 
 const byNewest = (a, b) => (b.start_time ?? 0) - (a.start_time ?? 0);
 
+/**
+ * When the newest match we can see actually started, in epoch ms, or null if
+ * the history is empty.
+ *
+ * This is the project's only honest freshness signal. `stale` on the state
+ * document means the proxy could not reach the API on one tick — transient,
+ * self-healing, and deliberately not drawn (see fallbackState). It says nothing
+ * about the case that actually bites: the API answering promptly with history
+ * that is hours behind, because an account not friended to a deadlock-api bot
+ * only ever gets the stored ClickHouse copy. There `stale` is false and every
+ * number is quietly old. The age of the newest match is what reveals that, and
+ * it is a timestamp rather than a formatted string so the overlay recomputes it
+ * on every render — which also makes a frozen document visibly age on screen.
+ */
+export function newestStart(entries) {
+  let best = null;
+  for (const e of entries ?? []) {
+    const t = e?.start_time;
+    if (typeof t === 'number' && t > 0 && (best === null || t > best)) best = t;
+  }
+  return best === null ? null : best * 1000;
+}
+
 /** Newest-first copy. The API's order is not contractual, so sort explicitly. */
 function recent(entries) {
   return (entries ?? []).slice().sort(byNewest);
@@ -164,9 +187,13 @@ export function averages(entries, countable = isCountable) {
  * clock and tests are not at the mercy of the machine's timezone.
  */
 export function sessionToday(entries, since, countable = isCountable) {
-  const todays = (entries ?? []).filter(countable)
+  const pool = (entries ?? []).filter(countable);
+  const todays = pool
     .filter(e => typeof e?.start_time === 'number' && e.start_time * 1000 >= since);
-  if (!todays.length) return {};
+  // Carried even on a day with no matches: an empty session block is exactly
+  // when the streamer most wants to know whether that is true or merely unseen.
+  const fresh = { lastMatchAt: newestStart(pool) };
+  if (!todays.length) return fresh;
 
   const scored = todays.filter(scoredBy(countable));
   const wins = scored.filter(won).length;
@@ -177,6 +204,7 @@ export function sessionToday(entries, since, countable = isCountable) {
   const delta = todays.reduce((a, e) => a + (e.ranked_delta ?? 0), 0);
 
   return {
+    ...fresh,
     todayRecord: `${wins}-${losses}`,
     winRateToday: scored.length ? `${Math.round((wins / scored.length) * 100)}%` : '',
     kd: deaths ? (kills / deaths).toFixed(1) : (kills ? '∞' : '0.0'),
