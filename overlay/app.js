@@ -42,10 +42,14 @@ let turn = 0;
 // retuned --xition-ident can never desync the swap from the cover.
 const IDENT_SWAP_FRACTION = 0.4;
 
-function cssMs(name) {
+// The fallback is not decoration: a missing or malformed token yields NaN, and
+// setInterval(fn, NaN) is treated as 0 — which would spin the browser source at
+// frame rate on a live broadcast rather than fail visibly.
+function cssMs(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const n = parseFloat(v);
-  return v.endsWith('ms') ? n : n * 1000;
+  const ms = v.endsWith('ms') ? n : n * 1000;
+  return Number.isFinite(ms) && ms > 0 ? ms : fallback;
 }
 
 // setInterval does not await poll(), so a slow /state fetch or a 1.9s ident
@@ -82,7 +86,7 @@ async function doPoll() {
       renderTurn(state, turn);
     };
     // the ident fully covers the frame, so swap under it at the peak
-    if (kind === 'ident') setTimeout(swap, cssMs('--xition-ident') * IDENT_SWAP_FRACTION); else swap();
+    if (kind === 'ident') setTimeout(swap, cssMs('--xition-ident', 1900) * IDENT_SWAP_FRACTION); else swap();
     await runTransition(kind, mark);
   } else if (!state) {
     state = next;
@@ -96,4 +100,8 @@ async function doPoll() {
 
 await poll();
 setInterval(poll, POLL_MS);
-setInterval(() => { if (!state) return; renderTurn(state, ++turn); turnLogo(mark); }, 9000);
+// Read from the token, not duplicated as a literal: --chiron-hold is the one
+// place the turn cadence is stated, and the logo's --mark-step is derived from
+// it (36deg x 10 turns = one revolution per 90s).
+setInterval(() => { if (!state) return; renderTurn(state, ++turn); turnLogo(mark); },
+  cssMs('--chiron-hold', 9000));
