@@ -1402,7 +1402,12 @@ git commit -m "feat: API client with bounded concurrency, config and advisory TT
 **Interfaces:**
 - Consumes: `derivePlayer` (Task 4), `rankLabel`/`tierColor` (Task 3), `FACTIONS`/`TEAM0_IS_AMBER` (Task 5).
 - Produces:
-  - `buildState({ match, steam, ranks, derived, session, now }) → StateDoc`
+  - `buildState({ match, steam, ranks, derived, operatorId, session, now }) → StateDoc`
+  - `operatorId` is the account whose row gets the `YOU` treatment, passed in
+    explicitly. `buildState` must NOT read it from `config.js` or `process.env`:
+    it is the composition root for everything the overlay renders, and a test
+    needs to build a document for an arbitrary operator without mutating global
+    state. The server passes `ACCOUNT_ID`; tests pass whatever they are asserting.
   - `emptyState(reason) → StateDoc` with `phase: 'IDLE'`
   - `derived` is a `Map<accountId, DerivedStats>` — the output of
     `derivePlayer`, **not** raw history arrays. The caller derives and discards
@@ -1501,7 +1506,7 @@ Expected: FAIL — cannot find module `../proxy/state.js`.
 
 ```js
 import { rankLabel, tierColor } from './rank.js';
-import { FACTIONS, TEAM0_IS_AMBER, ACCOUNT_ID } from './config.js';
+import { FACTIONS, TEAM0_IS_AMBER } from './config.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
 
@@ -1524,7 +1529,7 @@ function indexBy(rows, key) {
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
-function playerRow(p, steamById, rankById, derived) {
+function playerRow(p, steamById, rankById, derived, operatorId) {
   const prof = steamById.get(p.account_id);
   const rk = rankById.get(p.account_id);
   // Pre-derived by the caller so each 2.5MB history is released before the
@@ -1537,7 +1542,7 @@ function playerRow(p, steamById, rankById, derived) {
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
     avatar: prof?.avatarmedium ?? prof?.avatar ?? null,
     heroId: p.hero_id ?? null,
-    isSelf: p.account_id === ACCOUNT_ID,
+    isSelf: operatorId > 0 && p.account_id === operatorId,
     form: d.form,
     season: d.season.text,
     abandons: String(d.abandons),
@@ -1564,7 +1569,9 @@ export function emptyState(reason = '') {
   };
 }
 
-export function buildState({ match, steam, ranks, derived, session = {}, now = Date.now() }) {
+export function buildState({
+  match, steam, ranks, derived, operatorId = 0, session = {}, now = Date.now()
+}) {
   if (!match?.players?.length) return { ...emptyState('no active match'), generatedAt: now };
 
   const steamById = indexBy(steam, 'account_id');
@@ -1574,7 +1581,7 @@ export function buildState({ match, steam, ranks, derived, session = {}, now = D
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map()));
+    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map(), operatorId));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {
@@ -1636,18 +1643,19 @@ test('a player with no history at all still renders', () => {
   }
 });
 
-test('the operator is pinned first in their own faction', async () => {
-  // ACCOUNT_ID is read from the environment when config.js is first loaded,
-  // so it must be set BEFORE the dynamic import — and this test needs its own
-  // module instance, which is why it imports rather than using the top-level
-  // buildState. Without this the assertion is vacuous: nobody is ever isSelf.
+test('the operator is pinned first in their own faction', () => {
+  // operatorId is an argument, so this needs no env var and no module-cache
+  // trickery. An earlier draft tried `import('../proxy/state.js?bust=1')` after
+  // setting process.env — that does not work: the query re-evaluates state.js
+  // but its relative import of ./config.js resolves to the already-cached URL,
+  // so ACCOUNT_ID stayed frozen at 0 and the assertion failed. Verified
+  // empirically. Passing the id in is both simpler and actually correct.
   const target = match.players[4].account_id;
-  process.env.DSN_ACCOUNT_ID = String(target);
-  const fresh = await import(`../proxy/state.js?selftest=${target}`);
+  const s = buildState({
+    match, steam, ranks, derived: fullDerived, operatorId: target, session: {}, now: 1
+  });
 
-  const s = fresh.buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
   const all = s.teams.flatMap(t => t.players);
-
   const selves = all.filter(p => p.isSelf);
   assert.equal(selves.length, 1, 'exactly one row must be flagged as the operator');
   assert.equal(selves[0].accountId, target);
@@ -1656,8 +1664,17 @@ test('the operator is pinned first in their own faction', async () => {
   assert.equal(owning.players[0].isSelf, true,
     'the operator must be row 0 of their own faction, not merely present');
   assert.equal(owning.players.length, 6, 'pinning must not change the faction size');
+});
 
-  delete process.env.DSN_ACCOUNT_ID;
+test('with no operatorId, nobody is flagged — and nothing is reordered', () => {
+  // The unconfigured case. It must not silently pick a row, and it must not
+  // crash: the overlay still renders a full 12-row board with no YOU tag.
+  const s = buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
+  const all = s.teams.flatMap(t => t.players);
+  assert.equal(all.length, 12);
+  assert.equal(all.filter(p => p.isSelf).length, 0, 'no row may claim to be the operator');
+  assert.equal(s.teams[0].players.length, 6);
+  assert.equal(s.teams[1].players.length, 6);
 });
 ```
 
@@ -1724,7 +1741,7 @@ async function refresh() {
       return true;
     });
 
-    const state = buildState({ match, steam, ranks, derived });
+    const state = buildState({ match, steam, ranks, derived, operatorId: ACCOUNT_ID });
     matchCache.set(key, state);
     current = state;
   } catch (err) {
@@ -1753,7 +1770,8 @@ const server = createServer((req, res) => {
       match,
       steam: JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8')),
       ranks: JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8')),
-      derived: new Map(match.players.map(p => [p.account_id, stats]))
+      derived: new Map(match.players.map(p => [p.account_id, stats])),
+      operatorId: ACCOUNT_ID
     });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));
