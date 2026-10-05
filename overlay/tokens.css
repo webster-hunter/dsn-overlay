@@ -199,26 +199,10 @@
      gives it even 13px padding on all four sides and hands 79px of what was
      dead horizontal padding back to the stat groups. */
   --logo-bay-width: 132px;
-  --row-height: 48px;
-  --name-size: 14px;
-  --name-floor: 8px;
 
-  /* --- flap, from spec section 5.3 --- */
-  --flap-cells: 11;
-  --flap-head: 8;
-  /* 318 rail inner - 18 row padding - 28 hero icon - 8 gap - 11 cell margins
-     = 264 for the board, which at a 2px gap is 22px per cell. The board carries
-     the player's identity now that the name column is gone, so it gets the
-     whole width. */
-  --flap-cell-w: 22px;
-  --flap-cell-h: 30px;
-  --flap-type: 18px;
-  --flap-seam: 1.8px;
-  --flap-seam-op: 0.34;
 
   /* --- chiron, from spec section 6.1 --- */
   --chiron-hold: 9s;
-  --chiron-groups: 4;
 
   /* --- logo + transitions, from spec sections 6.4 and 6.5 --- */
   --mark-color: #FFEFD7;
