@@ -720,6 +720,7 @@ git commit -m "feat: rank tier formatting with safe fallback for unknown tiers"
 **Interfaces:**
 - Consumes: `fixtures/match-history.sample.json`.
 - Produces:
+  - `isCountable(entry) → boolean`
   - `isScored(entry) → boolean`
   - `isWin(entry) → boolean`
   - `isAbandon(entry) → boolean`
@@ -750,9 +751,29 @@ git commit -m "feat: rank tier formatting with safe fallback for unknown tiers"
    which needs no knowledge of the enum and works across both eras. Cross-tabs
    from both samples agree with it: where the two fields are equal the outcome
    is never `2`, and where they differ it is never `1`.
-2. **`abandoned_time_s` uses `0` as a sentinel, not `null`.** Across 4,348 entries: `null` 3,270 times, `0` 1,074 times, and non-zero only **4** times. Treating "non-null" as an abandon — which the spec's prose implies — would report 1,074 abandons instead of 4. The test below pins this.
+2. **Not every history entry belongs in a win/loss record.** Measured in the
+   recorded fixture: `game_mode` is `1` (Normal) on 61 of 63 entries and `4`
+   (**Street Brawl**) on 2; `match_mode` is `4` (Ranked) on 60 and `1`
+   (Unranked) on 3. Street Brawl is a round-based mode with its own scoring —
+   those two entries carry real `brawl_score_team0` values of 1 and 2 while the
+   other 54 are zero defaults.
 
-**Abandons are counted over the full history, not a 20-match window.** At a 0.09% base rate a 20-match window expects 0.018 abandons per player, so a windowed column reads `0` for all 12 players almost always. An all-time integer is informative. This adjusts spec §5.4 and is the one place this plan departs from it.
+   Counting Street Brawl in a MOBA win/loss record is counting a different
+   sport. It is not hypothetical: the displayed SEASON string differs by mode
+   filter, `32-31` unfiltered against `32-29` filtered — so without a rule the
+   overlay shows one of them by accident rather than by decision.
+
+   `derive.js` therefore counts only **Normal-mode Unranked or Ranked** play, as
+   an **allowlist**: `game_mode === 1 && (match_mode === 1 || match_mode === 4)`.
+   An allowlist rather than a blocklist because the enum has seven match modes
+   (`unranked, private_lobby, coop_bot, ranked, server_test, tutorial,
+   hero_labs`) and only `1` and `4` are confirmed by observation. An unknown
+   mode number is then excluded by default, which is the safe direction — a
+   mystery mode cannot inflate a win rate, and `coop_bot` very much would.
+
+3. **`abandoned_time_s` uses `0` as a sentinel, not `null`.** Across 4,348 entries: `null` 3,270 times, `0` 1,074 times, and non-zero only **4** times. Treating "non-null" as an abandon — which the spec's prose implies — would report 1,074 abandons instead of 4. The test below pins this.
+
+**Abandons are counted over the full countable history, not a 20-match window.** At a 0.09% base rate a 20-match window expects 0.018 abandons per player, so a windowed column reads `0` for all 12 players almost always. An all-time integer is informative. This adjusts spec §5.4 and is the one place this plan departs from it.
 
 - [ ] **Step 1: Write the failing test — win/loss derivation**
 
@@ -763,15 +784,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  isScored, isWin, isAbandon, form, seasonRecord,
+  isCountable, isScored, isWin, isAbandon, form, seasonRecord,
   abandonCount, streak, averages, derivePlayer
 } from '../proxy/derive.js';
 
 const REAL = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
 
-// minimal synthetic entry; override what a test cares about
+// Minimal synthetic entry; override what a test cares about.
+// game_mode 1 (Normal) + match_mode 4 (Ranked) make it countable by default —
+// without them isCountable rejects the entry and every aggregate reads zero.
 const e = (over = {}) => ({
   match_id: 1, start_time: 1000, player_team: 0, match_result: 0,
+  game_mode: 1, match_mode: 4,
   player_kills: 5, player_deaths: 5, player_assists: 5,
   net_worth: 50000, last_hits: 150, denies: 10,
   match_duration_s: 1800, hero_id: 1, abandoned_time_s: null, ...over
@@ -782,6 +806,51 @@ test('a win is player_team === match_result', () => {
   assert.equal(isWin(e({ player_team: 1, match_result: 1 })), true);
   assert.equal(isWin(e({ player_team: 0, match_result: 1 })), false);
   assert.equal(isWin(e({ player_team: 1, match_result: 0 })), false);
+});
+
+test('Street Brawl is excluded — it is a different mode with its own scoring', () => {
+  const brawl = e({ game_mode: 4, match_mode: 1, brawl_score_team0: 2 });
+  assert.equal(isCountable(brawl), false);
+  assert.equal(isScored(brawl), false, 'must not reach the win/loss comparison');
+
+  const mixed = [
+    e({ match_id: 1, player_team: 0, match_result: 0 }),                 // normal W
+    e({ match_id: 2, player_team: 0, match_result: 1 }),                 // normal L
+    e({ match_id: 3, game_mode: 4, match_mode: 1, player_team: 0, match_result: 1 })
+  ];
+  const rec = seasonRecord(mixed);
+  assert.deepEqual({ wins: rec.wins, losses: rec.losses }, { wins: 1, losses: 1 },
+    'the brawl entry must not appear in the record');
+});
+
+test('unranked normal play DOES count', () => {
+  assert.equal(isCountable(e({ match_mode: 1 })), true, 'match_mode 1 is Unranked');
+  assert.equal(isCountable(e({ match_mode: 4 })), true, 'match_mode 4 is Ranked');
+});
+
+test('an unrecognised mode is excluded, not counted — allowlist not blocklist', () => {
+  // The enum holds private_lobby, coop_bot, server_test, tutorial and hero_labs
+  // whose numbers are unconfirmed. Excluding by default means a bot-game mode
+  // cannot silently inflate a win rate.
+  for (const mm of [0, 2, 3, 5, 6, 7, 99, null, undefined]) {
+    assert.equal(isCountable(e({ match_mode: mm })), false,
+      `match_mode ${mm} is unconfirmed and must not count`);
+  }
+  for (const gm of [0, 2, 3, 4, 99, null, undefined]) {
+    assert.equal(isCountable(e({ game_mode: gm })), false,
+      `game_mode ${gm} is not Normal and must not count`);
+  }
+});
+
+test('averages exclude non-countable entries', () => {
+  // A brawl round is short and has its own net-worth scale; one would skew
+  // every average on the board.
+  const rows = [
+    e({ net_worth: 50000, match_duration_s: 1800 }),
+    e({ game_mode: 4, match_mode: 1, net_worth: 5, match_duration_s: 60 })
+  ];
+  assert.equal(averages(rows).netWorth, 50000, 'the brawl entry must not drag the mean');
+  assert.equal(averages(rows).matchLen, 1800);
 });
 
 test('player_match_outcome is never consulted, even when it contradicts', () => {
@@ -821,9 +890,32 @@ Create `proxy/derive.js`:
  * Every function here is pure. See spec section 3.6.
  */
 
+/**
+ * Normal-mode competitive play only — an ALLOWLIST.
+ *
+ * game_mode 1 = Normal, 4 = Street Brawl (a round-based mode with its own
+ * scoring; two such entries in the recorded fixture carry real brawl scores).
+ * match_mode 1 = Unranked, 4 = Ranked; the enum also holds private_lobby,
+ * coop_bot, server_test, tutorial and hero_labs, whose numbers are not
+ * confirmed by observation.
+ *
+ * Allowlisting means an unrecognised mode is excluded rather than counted. That
+ * is the safe direction: a mystery mode cannot inflate a win rate, and bot
+ * games would.
+ */
+const NORMAL_GAME_MODE = 1;
+const COMPETITIVE_MATCH_MODES = new Set([1, 4]);
+
+export function isCountable(entry) {
+  return entry?.game_mode === NORMAL_GAME_MODE
+      && COMPETITIVE_MATCH_MODES.has(entry?.match_mode);
+}
+
 /** An entry only counts toward W/L if both sides of the comparison exist. */
 export function isScored(entry) {
-  return Number.isInteger(entry?.player_team) && Number.isInteger(entry?.match_result);
+  return isCountable(entry)
+      && Number.isInteger(entry?.player_team)
+      && Number.isInteger(entry?.match_result);
 }
 
 /**
@@ -919,10 +1011,10 @@ export function seasonRecord(entries) {
   return { wins, losses, text: `${wins}-${losses}` };
 }
 
-/** All-time count. See the note on base rate in the task preamble. */
+/** All-time count over countable play. See the base-rate note in the preamble. */
 export function abandonCount(entries) {
   let n = 0;
-  for (const en of entries ?? []) if (isAbandon(en)) n++;
+  for (const en of entries ?? []) if (isCountable(en) && isAbandon(en)) n++;
   return n;
 }
 
@@ -1004,8 +1096,10 @@ export function streak(entries) {
 }
 
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+// Countable-only: a Street Brawl round lasts minutes and has its own net-worth
+// scale, so including one would skew every average on the board.
 const nums = (entries, field) =>
-  (entries ?? []).map(en => en?.[field]).filter(v => typeof v === 'number');
+  (entries ?? []).filter(isCountable).map(en => en?.[field]).filter(v => typeof v === 'number');
 
 export function averages(entries) {
   const kills = nums(entries, 'player_kills');
