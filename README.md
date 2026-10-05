@@ -54,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 139 tests, no install step needed
+npm test          # 142 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -217,7 +217,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-139 tests across 19 files, run by `node --test`. The quoted glob in the script
+142 tests across 20 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -234,6 +234,13 @@ Two suites are worth knowing about:
 - `tests/http.test.js` drives real requests against the server on an ephemeral
   port and asserts the process *survives* malformed input, not merely that it
   returns a 4xx.
+- `tests/tokens-drift.test.js` compares the static tokens in
+  `scripts/tokens.mjs` against the committed `overlay/tokens.css`, in both
+  directions. These had drifted completely apart once already: every layout
+  retune edited only the CSS, so `npm run tokens` would have silently reverted
+  the 16:9 gameplay area and dropped `--topbar-height` entirely, a patch later,
+  with nothing failing. **If this test fails, do not regenerate to make it
+  pass** — decide which file is stale first.
 
 ### Regenerating vendored assets
 
@@ -243,6 +250,15 @@ need these unless upstream changes:
 ```bash
 npm run tokens     # regenerates overlay/tokens.css from /v1/assets/colors
 npm run vendor     # re-downloads fonts, the three logo layers and 39 hero icons
+```
+
+The 39 hero icons are **currently vendored but unrendered.** They were the
+split-flap board's player identity, and that board is gone. They are kept
+because the chiron's Hero turn still prints `Hero 15` — a raw id, which is the
+weakest text on the broadcast — and these icons are what should replace it.
+`overlay/heroes/<id>.webp`, resolved by hero id with no manifest.
+
+```bash
 npm run fixtures   # re-records fixtures/ from live API responses
 ```
 
