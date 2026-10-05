@@ -1316,7 +1316,8 @@ export function batchRank(ids) {
   return get(`/players/rank?account_ids=${ids.join(',')}`);
 }
 
-/** 100 req/s, but ~2.5MB per player. Caller must reduce and discard the raw. */
+/** 100 req/s. Measured 18.5MB across a 12-player roster, up to 2.54MB for one
+ *  heavy account. Caller must reduce and release each response as it arrives. */
 export function matchHistory(accountId) {
   return get(`/players/${accountId}/match-history`);
 }
@@ -1328,9 +1329,10 @@ export function resolveCommands(accountId, vars) {
 }
 
 /**
- * Map ids through fn with bounded concurrency. Twelve 2.5MB downloads in
- * parallel is ~30MB in flight and will stall a streaming PC's uplink; three
- * at a time keeps it civil.
+ * Map ids through fn with bounded concurrency. Twelve histories total ~18.5MB;
+ * pulling them all at once would hold that in memory and compete with the
+ * stream's uplink for no benefit. Three at a time measures at 2.4s wall clock,
+ * which is immaterial against a 30-40 minute match.
  */
 export async function mapLimited(ids, fn, limit = HISTORY_CONCURRENCY) {
   const out = new Map();
@@ -1370,8 +1372,8 @@ git commit -m "feat: API client with bounded concurrency, config and advisory TT
   - `derived` is a `Map<accountId, DerivedStats>` — the output of
     `derivePlayer`, **not** raw history arrays. The caller derives and discards
     each 2.5 MB payload as it goes, so peak memory is one history rather than
-    twelve (~30 MB). `playerRow` therefore consumes pre-derived stats and never
-    calls `derivePlayer` itself.
+    twelve (measured 18.5 MB for a real roster). `playerRow` therefore consumes
+    pre-derived stats and never calls `derivePlayer` itself.
   - `StateDoc` shape, which the entire overlay renders from:
 
 ```js
