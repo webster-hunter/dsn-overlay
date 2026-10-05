@@ -8,10 +8,30 @@ const toCurrentColor = svg => svg
   .replace(/\sheight="[^"]*"/i, '')
   .replace(/fill="white"/gi, 'fill="currentColor"');
 
+/**
+ * Returns the mark, or null if it could not be built.
+ *
+ * Null rather than a thrown error because app.js awaits this at module top
+ * level: a rejection there aborts module evaluation, so nothing after the call
+ * runs — no chiron, no chat, no polling, a blank browser source for the whole
+ * broadcast. Every consumer (turnLogo, sweepLogo, runTransition) already guards
+ * for a missing mark, so degrading to "no logo" costs only the logo.
+ *
+ * r.ok is checked because a 404 resolves rather than rejecting, and its error
+ * page would otherwise be fed to innerHTML below.
+ */
 export async function mountLogo(host) {
-  const svgs = await Promise.all(
-    LAYERS.map(n => fetch(`logo/${n}.svg`).then(r => r.text()))
-  );
+  if (!host) return null;
+  let svgs;
+  try {
+    svgs = await Promise.all(LAYERS.map(n => fetch(`logo/${n}.svg`).then(r => {
+      if (!r.ok) throw new Error(`logo/${n}.svg -> ${r.status}`);
+      return r.text();
+    })));
+  } catch (err) {
+    console.warn('[logo] could not load the mark, continuing without it:', err.message);
+    return null;
+  }
   const mark = document.createElement('div');
   mark.className = 'mark';
   LAYERS.forEach((name, i) => {

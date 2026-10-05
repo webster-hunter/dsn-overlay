@@ -273,7 +273,15 @@ function handleRequest(req, res) {
       steam: JSON.parse(readFileSync(new URL('steam.sample.json', FIXTURES), 'utf8')),
       ranks: JSON.parse(readFileSync(new URL('rank.sample.json', FIXTURES), 'utf8')),
       derived: new Map(match.players.map(p => [p.account_id, stats])),
-      operatorId: ACCOUNT_ID || match.players[0].account_id,
+      // The configured id only if the recorded roster actually contains it.
+      // `ACCOUNT_ID || players[0]` was backwards: a configured .env — which the
+      // README tells every user to set — is truthy but is not in this fixture,
+      // so no row was isSelf, `operator` came out null, and all five chiron
+      // turns rendered dashes. ?fixture worked only for an UNCONFIGURED proxy,
+      // which is the one state a developer never leaves it in.
+      operatorId: match.players.some(p => p.account_id === ACCOUNT_ID)
+        ? ACCOUNT_ID
+        : match.players[0].account_id,
       // Without this the Session turn is dead in the only development path,
       // which is where it gets looked at. The recorded history is old, so this
       // exercises the honest case: no matches today, and a freshness age that

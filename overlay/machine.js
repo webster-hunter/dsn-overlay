@@ -27,15 +27,34 @@ export function nextTransition(prev, next) {
   return null;
 }
 
-/** Resolves on the first `animationend`/`animationcancel` for `name` on `el`. */
-function waitAnim(el, name) {
+/**
+ * Resolves on the first `animationend`/`animationcancel` for `name` on `el`,
+ * or after `capMs` if neither ever arrives.
+ *
+ * The cap is the important half. app.js holds its `polling` guard across the
+ * transition this promise gates, so one lost animationend stopped polling for
+ * the rest of the broadcast — a frozen overlay, no log, no recovery. OBS can
+ * cause exactly that by throttling a source it considers hidden.
+ *
+ * It resolves rather than rejects: the contract is "the screen is usable
+ * again", and the ident's cleanup rides the same .then() either way. 5s clears
+ * the longest transition (--xition-ident, 1.9s) several times over, so it can
+ * only fire when something has genuinely gone wrong.
+ */
+function waitAnim(el, name, capMs = 5000) {
   return new Promise(resolve => {
-    const done = e => {
-      if (e.animationName !== name) return;
+    let timer;
+    const finish = () => {
+      clearTimeout(timer);
       el.removeEventListener('animationend', done);
       el.removeEventListener('animationcancel', done);
       resolve();
     };
+    const done = e => { if (e.animationName === name) finish(); };
+    timer = setTimeout(() => {
+      console.warn(`[machine] ${name} never ended; continuing so polling resumes`);
+      finish();
+    }, capMs);
     el.addEventListener('animationend', done);
     el.addEventListener('animationcancel', done);
   });

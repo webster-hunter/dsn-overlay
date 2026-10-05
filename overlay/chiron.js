@@ -27,7 +27,11 @@ export const TURNS = [
     ['Today',      s.session.todayRecord ?? '-', s.session.winRateToday ?? ''],
     ['K / D',      s.session.kd ?? '-',          ''],
     ['Matches',    s.session.matches ?? '-',     ageLabel(s.session.lastMatchAt)],
-    ['Rank',       s.session.rank ?? '-',         s.session.rankProgress ?? '']
+    // sessionToday never writes a rank — it derives from match history, which
+    // carries per-match movement but not standing. This read a key that does
+    // not exist, so the group showed a dash with a live '+6' underneath it,
+    // while #persistent displayed the real rank from the same document.
+    ['Rank',       self(s)?.rank ?? '-',          s.session.rankProgress ?? '']
   ] },
   { spine: 'Hero', sub: 'Form', groups: s => {
     const me = self(s);
