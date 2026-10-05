@@ -9,7 +9,10 @@ import { makeCache } from './cache.js';
 import {
   activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
 } from './deadlock.js';
-import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS, SELF_RECHECK_MS } from './config.js';
+import { readGameLog } from './gamelog.js';
+import {
+  ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS, SELF_RECHECK_MS, DEADLOCK_LOG
+} from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
 
@@ -95,6 +98,28 @@ async function idleState() {
   }
 }
 
+/**
+ * A match is running, but the API will not name its players.
+ *
+ * This is the normal case, not the degraded one: /v1/matches/active is the
+ * in-game watch tab and an ordinary account's game is never in it, so the log
+ * knows a match exists while the only roster source does not. The document
+ * therefore carries the real phase with empty teams — which the chiron already
+ * renders as dashes, the same as any other absent group.
+ *
+ * The phase is what matters here even without a roster: it is what fires the
+ * sweep when play starts and the ident when the match ends.
+ */
+async function liveState(log) {
+  const idle = await idleState();
+  return {
+    ...idle,
+    phase: log.phase,
+    matchId: log.matchId,
+    reason: log.phase === 'MATCH' ? 'in match' : 'match forming'
+  };
+}
+
 /** Local midnight. The streamer's "today" is their day, not UTC's. */
 function startOfToday() {
   const d = new Date();
@@ -112,8 +137,27 @@ export async function doRefresh() {
   if (!ACCOUNT_ID) { current = emptyState('DSN_ACCOUNT_ID is not set'); return; }
 
   try {
+    // Deadlock's own log decides whether a match is running. The API cannot:
+    // /v1/matches/active is the watch tab, and it returned [] for this account
+    // *while it was mid-match*. Without -condebug the log does not exist, which
+    // readGameLog reports rather than throwing — and then this falls back to
+    // the API exactly as it did before, which is the best available answer.
+    const log = await readGameLog(DEADLOCK_LOG);
+    const logSaysLive = log.available && (log.phase === 'MATCH' || log.phase === 'FORMING');
+
+    // The roster still comes from the API, the only place it exists. Asking is
+    // worth it even when the log already knows a match is on: for an account
+    // whose match IS in the watch tab, this is what populates the Matchup turn.
     const match = await activeMatchFor(ACCOUNT_ID);
+
     if (!match) {
+      if (logSaysLive) {
+        // Known to be in a match the API will not describe. Carry the phase so
+        // the transitions fire, and let the roster be absent.
+        sawMatch = true;
+        current = await liveState(log);
+        return;
+      }
       // A match ending is exactly when today's record, form and streak change,
       // and exactly when someone is looking at the overlay.
       if (sawMatch) {
@@ -121,8 +165,8 @@ export async function doRefresh() {
         selfCache.drop(String(ACCOUNT_ID));
         console.log('[refresh] match ended — refreshing the operator history');
       } else if (lastSelfFetch && Date.now() - lastSelfFetch > SELF_RECHECK_MS) {
-        // Net for a match the active-match feed never reported: without this a
-        // missed match stays invisible for the whole CONTEXT_TTL_MS hour.
+        // Net for a match neither source reported: without this a missed match
+        // stays invisible for the whole CONTEXT_TTL_MS hour.
         selfCache.drop(String(ACCOUNT_ID));
         console.log('[refresh] periodic re-check of the operator history');
       }
