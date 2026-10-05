@@ -1221,7 +1221,23 @@ export const TEAM0_IS_AMBER = true;
 export const FACTIONS = { amber: 'Hidden King', sapphire: 'Archmother' };
 
 export const POLL_MS = 15_000;          // match detection
-export const MATCH_TTL_MS = 6 * 60_000; // roster is immutable after start
+
+/**
+ * Longer than any plausible match, deliberately.
+ *
+ * NOTHING in the state document changes while a match runs: the roster is
+ * fixed at start, names and ranks only move between matches, and the current
+ * match is not in anyone's history yet. So a mid-match expiry buys no fresh
+ * data and costs a full 17-call, 18.5 MB re-assembly. At the original 6 minutes
+ * a 35-minute match re-assembled five or six times — roughly 100 calls and
+ * 111 MB for data that could not have changed, against a stated constraint of
+ * "fetch once per match, never poll".
+ *
+ * The TTL survives only to bound memory across a long session (one small entry
+ * per match_id), not to refresh anything. Match END is detected by the 15s
+ * poll of /matches/active, not by this expiring.
+ */
+export const MATCH_TTL_MS = 90 * 60_000;
 export const CONTEXT_TTL_MS = 60 * 60_000;
 export const HISTORY_CONCURRENCY = 3;   // 12 x 2.5MB; do not fetch in parallel
 ```
@@ -1683,6 +1699,40 @@ test('with no operatorId, nobody is flagged — and nothing is reordered', () =>
 Run: `node --test tests/state.test.js`
 Expected: PASS, 6 tests. If `no history at all` fails on `NaN`, check the zero-length guards in `averages`.
 
+- [ ] **Step 6b: Write `proxy/static.js`**
+
+The path resolver lives in its own module for one reason: the traversal test
+must exercise the **real** function. An earlier draft duplicated the logic into
+the test, which meant a future edit to the route could diverge from its guard
+without failing anything — defeating the point of having the test at all.
+
+`server.js` has side effects at module load (it listens and starts polling), so
+a test cannot simply import it. Extracting the resolver is the smaller fix.
+
+```js
+import { join, normalize } from 'node:path';
+
+const ROOT = 'overlay';
+
+/**
+ * Map a request pathname to a file under `overlay/`, safely.
+ *
+ * Safe against traversal, but for non-obvious reasons worth naming so a later
+ * "simplification" does not remove the protection. Two independent layers:
+ *   1. WHATWG URL collapses `..` segments and decodes %2e in `pathname` before
+ *      this is called, so `/%2e%2e/%2e%2e/x` arrives as `/x`.
+ *   2. `path.normalize` CLAMPS `..` at root for a `/`-prefixed path: it yields a
+ *      root-relative `x`, never `../../x`.
+ * The `.replace` covers the no-leading-slash case. Verified against 13 attack
+ * vectors (encoded, double-encoded, `....//`, null byte, backslash); see
+ * tests/static.test.js.
+ */
+export function resolveStatic(pathname) {
+  const rel = pathname === '/' ? '/index.html' : pathname;
+  return join(ROOT, normalize(rel).replace(/^(\.\.[/\])+/, ''));
+}
+```
+
 - [ ] **Step 7: Write `proxy/server.js`**
 
 One route for the overlay, one for development. `/fixture` is what makes the entire visual layer buildable with no game running.
@@ -1690,7 +1740,8 @@ One route for the overlay, one for development. `/fixture` is what makes the ent
 ```js
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { extname } from 'node:path';
+import { resolveStatic } from './static.js';
 import { buildState, emptyState } from './state.js';
 import { derivePlayer } from './derive.js';
 import { makeCache } from './cache.js';
@@ -1777,20 +1828,9 @@ const server = createServer((req, res) => {
     return res.end(JSON.stringify(state));
   }
 
-  // Static overlay files.
-  //
-  // This is safe against path traversal, but for non-obvious reasons worth
-  // naming so a later "simplification" does not remove the protection. Two
-  // independent layers:
-  //   1. WHATWG URL collapses `..` segments in `pathname` before we see it, and
-  //      decodes %2e — so `/%2e%2e/%2e%2e/x` arrives as `/x`.
-  //   2. `path.normalize` CLAMPS `..` at root for a `/`-prefixed path:
-  //      normalize('/../../../x') === '\\x', never '../../x'.
-  // The `.replace` then covers the no-leading-slash case. Verified against 13
-  // attack vectors (encoded, double-encoded, `....//`, null byte, backslash);
-  // see the traversal test in tests/server.test.js.
-  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-  const file = join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  // Static overlay files. Resolution lives in proxy/static.js so the traversal
+  // test imports the real function rather than a hand-copied duplicate of it.
+  const file = resolveStatic(url.pathname);
   if (existsSync(file)) {
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
     return res.end(readFileSync(file));
@@ -1839,18 +1879,20 @@ but by a mechanism subtle enough that a refactor could silently remove the
 protection — so pin it with a test rather than a comment. This tests the
 resolution logic directly, with no server needed.
 
-Create `tests/server.test.js`:
+Create `tests/static.test.js`:
 
 ```js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join, normalize, resolve, sep } from 'node:path';
+import { resolve, normalize, sep } from 'node:path';
+// The REAL resolver, not a copy. A hand-duplicated one could diverge from the
+// route silently, which would defeat the purpose of this entire test file.
+import { resolveStatic as resolveFile } from '../proxy/static.js';
 
-/** The exact resolution the server performs, lifted for testability. */
+/** Mirror the server's URL parsing, then hand off to the real resolver. */
 function resolveStatic(rawUrl) {
   const url = new URL(rawUrl, 'http://localhost:7331');
-  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-  return join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  return resolveFile(url.pathname);
 }
 
 const ROOT = resolve('overlay');
@@ -1944,13 +1986,13 @@ test('normalize clamps .. at root — the property the guard leans on', () => {
 
 - [ ] **Step 10: Run the test**
 
-Run: `node --test tests/server.test.js`
-Expected: PASS, 3 tests.
+Run: `node --test tests/static.test.js`
+Expected: PASS, 5 tests (3 traversal/asset + 2 mapLimited).
 
 - [ ] **Step 11: Commit**
 
 ```bash
-git add proxy/state.js proxy/server.js tests/state.test.js tests/server.test.js
+git add proxy/state.js proxy/static.js proxy/server.js tests/state.test.js tests/static.test.js
 git commit -m "feat: assemble the /state document and serve it, with a fixture route"
 ```
 
