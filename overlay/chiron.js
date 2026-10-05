@@ -69,7 +69,7 @@ export const TURNS = [
 // No fallback to another row: an absent operator must read as a gap (every
 // `me?.x ?? '-'` call site already pads to dashes, and fourGroups() pads a
 // short/empty turn to four groups), never as another player's stats
-// presented as the streamer's own. Matches proxy/registry.js's self().
+// presented as the streamer's own.
 // The proxy puts the operator on the document directly, so these turns work
 // between matches as well as during one — searching the roster only found them
 // while a game was running, which is exactly when the streamer is not looking.
