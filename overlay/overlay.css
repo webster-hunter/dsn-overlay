@@ -161,3 +161,43 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
     #2D2109 calc(50% + var(--flap-seam)),
     #35270C calc(50% + var(--flap-seam) + 1px), #1E1506 100%);
   color: var(--color-gold); }
+
+/* --- chiron --- */
+#spine {
+  flex: none; width: 104px; padding: 0 12px; display: flex; flex-direction: column;
+  justify-content: center; gap: 2px;
+  border-right: 1px solid #453D2E; background: rgba(0,0,0,.16);
+}
+.spine-sub { font-size: 8px; letter-spacing: .16em; text-transform: uppercase; color: #A3814A; font-weight: 800; }
+.spine-title { font-family: "Reaver", "Radiance", sans-serif; font-weight: 700; font-size: 15px; color: var(--color-gold); line-height: 1.05; }
+
+#groups { flex: 1; min-width: 0; position: relative; }
+.grouprow {
+  position: absolute; inset: 0; display: flex; align-items: center; padding: 0 6px;
+  transform: translateY(100%); opacity: 0;
+}
+.grouprow.in { animation: roll-in .5s cubic-bezier(.2,.9,.28,1) forwards; }
+.grouprow.out { animation: roll-out .42s cubic-bezier(.6,0,.75,.2) forwards; }
+@keyframes roll-in { to { transform: translateY(0); opacity: 1; } }
+@keyframes roll-out { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-100%); opacity: 0; } }
+
+.group {
+  flex: 1; min-width: 0; padding: 0 16px; display: flex; flex-direction: column;
+  justify-content: center; gap: 3px; border-left: 1px solid rgba(255,239,215,.09);
+  opacity: 0; transform: translateY(26%);
+  animation: group-in .36s cubic-bezier(.2,.9,.28,1) forwards;
+}
+.group:first-child { border-left: none; }
+@keyframes group-in { to { opacity: 1; transform: translateY(0); } }
+.glabel { font-size: 9px; letter-spacing: .17em; text-transform: uppercase; color: #A3814A; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 600; font-size: 23px; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group.lead .gvalue { color: var(--color-gold); }
+.gsub { font-size: 8px; color: #6F6757; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+#persistent {
+  flex: none; display: flex; gap: 14px; align-items: center; padding: 0 15px;
+  border-left: 1px solid #453D2E; background: rgba(0,0,0,.22);
+}
+.punit { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.plabel { font-size: 7px; letter-spacing: .16em; text-transform: uppercase; color: #A3814A; font-weight: 800; }
+.pvalue { font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 700; font-size: 19px; color: var(--color-gold); line-height: 1; }
