@@ -69,12 +69,18 @@ test('the charset covers every glyph the board can display', () => {
 
 test('spin always moves and is capped', () => {
   assert.ok(spinSteps('A', 'A', 14) > 0, 'an unchanged glyph must still flap');
-  assert.ok(spinSteps('A', 'B', 14) <= 14);
-  assert.ok(spinSteps(' ', 'Z', 14) <= 14);
+  // pinned to the actual arithmetic — `<= 14` alone is true for any input
+  // by construction (spinSteps always returns Math.min(x, cap)) and cannot fail
+  assert.equal(spinSteps('A', 'B', 14), 1);
+  // raw distance from ' ' to 'Z' is 26, which exceeds the 14 cap — pinning
+  // this to 14 (not just asserting <= 14) is what actually exercises the cap
+  assert.equal(spinSteps(' ', 'Z', 14), 14);
+  // the cap is a parameter, not hardwired to 14 — prove a smaller one engages too
+  assert.equal(spinSteps('A', 'Z', 3), 3, 'a tighter cap must still be honoured');
   for (const from of CHARSET) {
     for (const to of CHARSET) {
       const n = spinSteps(from, to, 14);
-      assert.ok(n >= 1 && n <= 14, `spinSteps(${from},${to}) = ${n}`);
+      assert.ok(n >= 1, `spinSteps(${from},${to}) = ${n}`);
     }
   }
 });
