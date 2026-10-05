@@ -39,8 +39,11 @@ export const TURNS = [
   } }
 ];
 
-const self = s => s.teams.flatMap(t => t.players).find(p => p.isSelf)
-            ?? s.teams[0]?.players[0];
+// No fallback to another row: an absent operator must read as a gap (every
+// `me?.x ?? '-'` call site already pads to dashes, and fourGroups() pads a
+// short/empty turn to four groups), never as another player's stats
+// presented as the streamer's own. Matches proxy/registry.js's self().
+const self = s => s.teams.flatMap(t => t.players).find(p => p.isSelf) ?? null;
 
 /**
  * Element builders. These exist so no API-sourced string is ever parsed as

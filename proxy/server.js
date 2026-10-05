@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { extname } from 'node:path';
 import { resolveStatic } from './static.js';
-import { buildState, emptyState } from './state.js';
+import { buildState, emptyState, fallbackState } from './state.js';
 import { derivePlayer } from './derive.js';
 import { makeCache } from './cache.js';
 import {
@@ -75,8 +75,8 @@ async function doRefresh() {
     matchCache.set(key, state);
     current = state;
   } catch (err) {
-    // Never render a hole: keep serving the last good document.
     console.error('[refresh]', err.message);
+    current = fallbackState(current, err.message);
   }
 }
 

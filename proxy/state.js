@@ -16,7 +16,10 @@ const EMPTY_DERIVED = {
 
 function indexBy(rows, key) {
   const m = new Map();
-  for (const r of rows ?? []) if (r && key in r) m.set(r[key], r);
+  if (!Array.isArray(rows)) return m;      // a string or object upstream must not throw
+  for (const r of rows) {
+    if (r && typeof r === 'object' && key in r) m.set(r[key], r);
+  }
   return m;
 }
 
@@ -96,4 +99,16 @@ export function buildState({
   };
   doc.salient = rankStats(doc);
   return doc;
+}
+
+/**
+ * Serve the last good document rather than nothing. Spec section 9: never
+ * render a hole. `stale` is for our logs — the overlay does not surface it,
+ * because a real network never captions which feed failed.
+ */
+export function fallbackState(previous, reason = '') {
+  if (previous?.teams?.length) {
+    return { ...previous, stale: true, reason };
+  }
+  return { ...emptyState(reason), stale: true };
 }
