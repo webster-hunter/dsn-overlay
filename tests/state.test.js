@@ -67,7 +67,6 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
   const row = all.find(p => p.accountId === victim);
   assert.equal(row.name, 'UNKNOWN');
   assert.equal(row.rank, 'UNRANKED');
-  assert.match(row.rankColor, /^#[0-9A-F]{6}$/i, 'a colour is still required');
   assert.equal(row.form.length, 11, 'FORM still fills the board');
 });
 

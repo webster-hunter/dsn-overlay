@@ -1,7 +1,6 @@
-import { rankLabel, tierColor } from './rank.js';
+import { rankLabel } from './rank.js';
 import { FACTIONS, TEAM0_IS_AMBER, STREAMER } from './config.js';
 import { GAME_MODES } from './derive.js';
-import { rankStats } from './registry.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
 
@@ -54,7 +53,6 @@ function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal')
     // error than telling a broadcast its streamer is Obscurus when they are
     // simply unranked.
     rank: ranked ? rankLabel(rk.rank, rk.subrank) : 'UNRANKED',
-    rankColor: ranked ? tierColor(rk.rank) : tierColor(-1),
     kd: Number.isFinite(kd) ? kd.toFixed(1) : '∞',
     streak: d.streak.kind ? `${d.streak.kind}${d.streak.n}` : '0',
     netWorth: k(d.averages.netWorth),
@@ -97,10 +95,10 @@ export function emptyState(reason = '', { operator = null, session = {}, mode = 
     phase: 'IDLE', matchId: null, reason, operator, mode,
     factions: FACTIONS,
     teams: [
-      { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
-      { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: [] }
+      { faction: FACTIONS.amber, players: [] },
+      { faction: FACTIONS.sapphire, players: [] }
     ],
-    session, salient: [], streamer: STREAMER, generatedAt: Date.now()
+    session, streamer: STREAMER, generatedAt: Date.now()
   };
 }
 
@@ -133,18 +131,16 @@ export function buildState({
     matchId: match.match_id ?? null,
     factions: FACTIONS,
     teams: [
-      { faction: FACTIONS.amber, colorVar: '--team-amber', players: bucket.amber },
-      { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: bucket.sapphire }
+      { faction: FACTIONS.amber, players: bucket.amber },
+      { faction: FACTIONS.sapphire, players: bucket.sapphire }
     ],
     session,
     streamer: STREAMER,
-    generatedAt: now,
-    salient: []
+    generatedAt: now
   };
   // One place to find the streamer, match or no match: during a match this is
   // the same object already pinned first in their faction.
   doc.operator = [...bucket.amber, ...bucket.sapphire].find(p => p.isSelf) ?? null;
-  doc.salient = rankStats(doc);
   return doc;
 }
 

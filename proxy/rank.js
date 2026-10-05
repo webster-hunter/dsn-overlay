@@ -6,7 +6,6 @@ import { TIERS } from './rank-tiers.js';
 export { TIERS };
 
 const FALLBACK_LABEL = 'UNRANKED';
-const FALLBACK_COLOR = '#FFED79';
 
 function tier(rank) {
   return Number.isInteger(rank) && rank >= 0 && rank < TIERS.length ? TIERS[rank] : null;
@@ -18,8 +17,4 @@ export function rankLabel(rank, subrank) {
   if (!t) return FALLBACK_LABEL;
   const s = Number.isInteger(subrank) && subrank >= 1 && subrank <= 6 ? ` ${subrank}` : '';
   return (t.name + s).toUpperCase();
-}
-
-export function tierColor(rank) {
-  return tier(rank)?.color ?? FALLBACK_COLOR;
 }

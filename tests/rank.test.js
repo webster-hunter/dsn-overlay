@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TIERS, rankLabel, tierColor } from '../proxy/rank.js';
+import { TIERS, rankLabel } from '../proxy/rank.js';
 
 test('there are exactly 12 tiers', () => {
   assert.equal(TIERS.length, 12);
@@ -47,14 +47,17 @@ test('spot-check two colours against the live API values', () => {
   assert.equal(byName.Ascendant, '#C39751');
 });
 
-test('labels are uppercase and fit 11 cells', () => {
+// 11 characters was the split-flap board's cell count. The board is gone, but
+// the cap is still real: the rank is rendered in a chiron group of fixed width,
+// and the two longest tier names already sit exactly on it.
+test('labels are uppercase and stay inside 11 characters', () => {
   assert.equal(rankLabel(10, 6), 'ASCENDANT 6');
   assert.equal(rankLabel(6, 1), 'RITUALIST 1');
   assert.equal(rankLabel(8, 2), 'ORACLE 2');
   for (let r = 0; r < 12; r++) {
     for (let s = 1; s <= 6; s++) {
       assert.ok(rankLabel(r, s).length <= 11,
-        `rankLabel(${r},${s}) = "${rankLabel(r, s)}" exceeds 11 cells`);
+        `rankLabel(${r},${s}) = "${rankLabel(r, s)}" exceeds the 11-character budget`);
     }
   }
 });
@@ -68,11 +71,12 @@ test('the two longest tiers are exactly 11 characters', () => {
 test('an out-of-range tier degrades safely, never "undefined"', () => {
   for (const bad of [12, 99, -1, null, undefined, NaN]) {
     const label = rankLabel(bad, 3);
+    // No length assertion here: every one of these inputs returns the same
+    // 8-character 'UNRANKED', so `length <= 11` could never fail. The real
+    // contract is that nothing leaks a JavaScript non-value into the chiron.
     assert.doesNotMatch(label, /undefined|NaN|null/, `rankLabel(${bad},3) = "${label}"`);
-    assert.ok(label.length <= 11);
   }
   assert.equal(rankLabel(12, 3), 'UNRANKED');
-  assert.match(tierColor(12), /^#[0-9A-F]{6}$/i);
 });
 
 test('real fixture ranks all format', async () => {
