@@ -1,2 +1,14 @@
 import { mountLogo } from './logo.js';
-mountLogo(document.getElementById('logo-bay'));
+import { mountBoard, renderBoard, showMode } from './board.js';
+
+const el = id => document.getElementById(id);
+
+const state = await fetch('/fixture').then(r => r.json());
+
+await mountLogo(el('logo-bay'));
+mountBoard(el('board'), el('stat-name'));
+renderBoard(state, el('board'));
+
+let mode = 0;
+showMode(mode);
+setInterval(() => showMode(++mode), 9000);

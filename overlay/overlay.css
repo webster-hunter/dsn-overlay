@@ -39,7 +39,7 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 /* the stat name is the column header for right-justified values, so it
    shares their right edge — spec section 5.1 */
 .flaprow { display: flex; gap: 2px; justify-content: flex-end; }
-#board { flex: 1; min-height: 0; }
+#board { flex: 1; min-height: 0; overflow: hidden; }
 
 #chiron {
   height: var(--chiron-height); flex: none; display: flex;
@@ -83,3 +83,81 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 /* one deliberate half-turn, for a state change */
 .mark.sweep .outer { animation: mark-sweep var(--xition-sweep) cubic-bezier(.3,.02,.2,1); }
 @keyframes mark-sweep { from { transform: rotate(0); } to { transform: rotate(180deg); } }
+
+/* --- board --- */
+.band {
+  display: flex; justify-content: space-between; padding: 5px 10px; flex: none;
+  font-family: "Reaver", "Radiance", sans-serif; font-weight: 700;
+  font-size: 9px; letter-spacing: .15em; text-transform: uppercase;
+  color: var(--band); background: color-mix(in srgb, var(--band) 17%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--band) 42%, transparent);
+}
+.prow {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  height: var(--row-height); padding: 0 9px;
+  border-bottom: 1px solid rgba(255,239,215,.045);
+}
+.prow .avatar {
+  width: 24px; height: 24px; flex: none; border-radius: 2px; border: 1px solid #6B5A46;
+  background: linear-gradient(135deg,#5A4A3A,#30261D) center/cover no-repeat;
+}
+.prow .names { flex: 1; min-width: 0; overflow: hidden; }
+/* the ellipsis fallback once fit.js has bottomed out at the floor */
+.prow .name {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; line-height: 1.15;
+}
+.prow .sub { font-size: 9px; color: #6F6757; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow.me { background: linear-gradient(90deg, color-mix(in srgb, var(--team-amber) 20%, transparent) 0%, rgba(255,237,121,.05) 55%, transparent 100%); }
+.prow.me::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--color-gold); }
+.prow.me .name { color: var(--color-gold); font-weight: 700; }
+.youtag {
+  flex: none; font-size: 7px; font-weight: 800; letter-spacing: .13em;
+  padding: 1px 3px; border-radius: 1px; color: #201500; background: var(--color-gold);
+}
+
+/* --- flap --- */
+.flap {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--flap-cell-w); height: var(--flap-cell-h); font-size: var(--flap-type);
+  margin-left: 1px; border-radius: 1px; overflow: hidden; line-height: 1;
+  font-family: "RadianceM", "Radiance", ui-monospace, monospace; font-weight: 600;
+  color: var(--base-text);
+  background: linear-gradient(180deg, #2E2A23 0%,
+    #242019 calc(50% + var(--flap-seam)),
+    #191610 calc(50% + var(--flap-seam) + 1px), #13100C 100%);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 1px 0 rgba(255,239,215,.05);
+}
+.flap::after {
+  content: ""; position: absolute; left: 0; right: 0; z-index: 3; height: 1px;
+  top: calc(50% + var(--flap-seam));
+  background: rgba(0,0,0,var(--flap-seam-op));
+  box-shadow: 0 1px 0 rgba(255,239,215,.085);
+}
+.flap .glyph { display: block; transform-origin: center top; backface-visibility: hidden; }
+.flap.flipping .glyph { animation: flap-step .058s linear; }
+@keyframes flap-step {
+  0% { transform: rotateX(0); filter: brightness(1); }
+  49% { transform: rotateX(-82deg); filter: brightness(.45); }
+  51% { transform: rotateX(82deg); filter: brightness(.45); }
+  100% { transform: rotateX(0); filter: brightness(1); }
+}
+.flap.blank { background: linear-gradient(180deg, #242017 0%,
+  #1B1710 calc(50% + var(--flap-seam)),
+  #141009 calc(50% + var(--flap-seam) + 1px), #100D07 100%); }
+.flap.tier { color: var(--tier, var(--color-gold)); }
+.flap.w { color: #112A1C; background: linear-gradient(180deg, #6FF0AB 0%,
+  #43C47F calc(50% + var(--flap-seam)),
+  #36A96C calc(50% + var(--flap-seam) + 1px), #2A8A57 100%); }
+.flap.l { color: #2E0F08; background: linear-gradient(180deg, #FFA184 0%,
+  #E5664A calc(50% + var(--flap-seam)),
+  #C9503A calc(50% + var(--flap-seam) + 1px), #A53C2B 100%); }
+.flap.w::after, .flap.l::after {
+  background: rgba(0,0,0,calc(var(--flap-seam-op) * .65));
+  box-shadow: 0 1px 0 rgba(255,255,255,.18);
+}
+#board-head .flap { width: 16px; height: 21px; font-size: 12px;
+  background: linear-gradient(180deg, #4A3718 0%,
+    #2D2109 calc(50% + var(--flap-seam)),
+    #35270C calc(50% + var(--flap-seam) + 1px), #1E1506 100%);
+  color: var(--color-gold); }
