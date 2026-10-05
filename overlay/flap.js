@@ -45,8 +45,16 @@ function paint(cell, ch, tint) {
   }
 }
 
+// Per-row generation counter. A call to setFlapRow bumps it; any in-flight
+// chain from a superseded call sees its own generation go stale and stops
+// touching the glyph — otherwise two overlapping calls on the same row race
+// on the same cell and the row settles as a permanent splice of both targets.
+const gen = new WeakMap();
+
 /** Flap the row to `text`, cascading left to right. */
 export function setFlapRow(row, text, tint, baseDelay = 0) {
+  const g = (gen.get(row) ?? 0) + 1;
+  gen.set(row, g);
   const cells = row.children;
   const padded = padRight(text, cells.length);
   for (let i = 0; i < cells.length; i++) {
@@ -56,6 +64,7 @@ export function setFlapRow(row, text, tint, baseDelay = 0) {
     const steps = spinSteps(glyph.textContent, target);
     let k = 0;
     setTimeout(function step() {
+      if (gen.get(row) !== g) return;
       if (k >= steps) { glyph.textContent = target; paint(cell, target, tint); return; }
       k++;
       const from = Math.max(0, CHARSET.indexOf(glyph.textContent));

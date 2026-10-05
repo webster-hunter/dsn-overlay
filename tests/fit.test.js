@@ -48,12 +48,17 @@ test('32 wide capitals shrink rather than widening the column', () => {
 test('emoji-laden names behave like full-width text', () => {
   const emoji = '🔥'.repeat(20);
   const size = fitSize(emoji, 169, measure, OPTS);
-  assert.ok(size >= 8 && size <= 14);
-  assert.ok(Number.isFinite(size), 'must not return NaN for astral-plane glyphs');
+  // astral-plane code points must not throw off the loop into NaN; pinning
+  // the exact value (rather than just checking the [min,max] range, which
+  // holds for any input by construction) is what makes this assertion able
+  // to fail.
+  assert.equal(size, 8, 'must bottom out at the floor, not NaN');
 });
 
-test('a 32-char Latin name fits without shrinking much', () => {
+test('a 32-char Latin name shrinks to 9px, not the floor', () => {
   const latin = 'xX_ShadowReaperSniper420_Xxaaaaa'.slice(0, 32);
   const size = fitSize(latin, 169, measure, OPTS);
-  assert.ok(size >= 8, 'stays in range');
+  // pinned to the fixture's actual output — `size >= 8` alone is true for
+  // any input by construction (8 is fitSize's floor) and cannot fail
+  assert.equal(size, 9);
 });

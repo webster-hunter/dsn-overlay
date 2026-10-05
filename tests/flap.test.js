@@ -1,6 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CHARSET, padRight, spinSteps } from '../overlay/flap.js';
+import { CHARSET, padRight, spinSteps, setFlapRow } from '../overlay/flap.js';
+
+/** Minimal DOM-free stand-in for a flap cell + its glyph span. */
+function stubRow(n) {
+  const cells = [];
+  for (let i = 0; i < n; i++) {
+    cells.push({
+      firstChild: { textContent: ' ' },
+      classList: { add() {}, remove() {} },
+      style: { setProperty() {}, removeProperty() {} },
+      offsetWidth: 0
+    });
+  }
+  return { children: cells };
+}
+
+/**
+ * A real setTimeout/wall-clock interrupt is flaky — whether the race in
+ * setFlapRow actually clobbers depends on exact millisecond timing, which
+ * varies by machine load. This replaces global setTimeout with a virtual
+ * clock for the duration of the test: calls queue instead of firing, and
+ * `advance(ms)` drains everything due by then, in time order, synchronously.
+ * Not a fake-timer dependency — just explicit draining of a tiny local queue.
+ */
+function withVirtualClock(fn) {
+  const real = globalThis.setTimeout;
+  let now = 0;
+  const queue = [];
+  globalThis.setTimeout = (cb, ms = 0) => { queue.push({ time: now + ms, cb }); };
+  try {
+    fn({
+      advance(ms) {
+        const until = now + ms;
+        queue.sort((a, b) => a.time - b.time);
+        while (queue.length && queue[0].time <= until) {
+          const ev = queue.shift();
+          now = ev.time;
+          ev.cb();
+          queue.sort((a, b) => a.time - b.time);
+        }
+        now = until;
+      }
+    });
+  } finally {
+    globalThis.setTimeout = real;
+  }
+}
 
 test('values are right-justified into a fixed width', () => {
   assert.equal(padRight('4', 11),           '          4');
@@ -35,4 +81,24 @@ test('spin always moves and is capped', () => {
 
 test('spin is deterministic — the same pair always gives the same count', () => {
   assert.equal(spinSteps('A', 'Q', 14), spinSteps('A', 'Q', 14));
+});
+
+test('a second setFlapRow call supersedes an in-flight one — no splice of both targets', () => {
+  withVirtualClock(({ advance }) => {
+    const row = stubRow(4);
+    // 'Z' is maximally far from the initial blank, so the first chain is
+    // still deep in its 14-step cascade (worth ~812ms of ticks) when the
+    // interrupt lands at 200ms — every cell is still mid-flight, not just
+    // settling. 'H' is a short hop from wherever that cascade has reached by
+    // then, so the second chain finishes well before the first chain's
+    // leftover ticks are done firing: exactly the ordering that exposes the
+    // bug (the superseded chain's later tick overwrites the winner).
+    setFlapRow(row, 'ZZZZ', null);
+    advance(200);
+    setFlapRow(row, 'HHHH', null);
+    advance(2000);                 // generous upper bound: worst case is cap(14) steps * 58ms + cascade offset
+    const glyphs = row.children.map(c => c.firstChild.textContent);
+    assert.deepEqual(glyphs, ['H', 'H', 'H', 'H'],
+      `superseded chain must not land its own target; got ${JSON.stringify(glyphs)}`);
+  });
 });

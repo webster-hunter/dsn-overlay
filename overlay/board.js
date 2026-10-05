@@ -40,7 +40,7 @@ function rowEl(player) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  if (player.avatar) avatar.style.backgroundImage = `url(${player.avatar})`;
+  if (player.avatar) avatar.style.backgroundImage = `url(${JSON.stringify(player.avatar)})`;
 
   const names = document.createElement('div');
   names.className = 'names';
