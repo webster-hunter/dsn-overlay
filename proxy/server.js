@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
@@ -13,6 +13,10 @@ import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS } from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
 const matchCache = makeCache(MATCH_TTL_MS);
+
+// Resolved against this module, not the process cwd, so `npm run serve`
+// works the same regardless of the directory it is launched from.
+const FIXTURES = new URL('../fixtures/', import.meta.url);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -81,26 +85,41 @@ export async function doRefresh() {
   }
 }
 
-const server = createServer((req, res) => {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+/**
+ * A single malformed request must never take the whole process down — the
+ * overlay does not notice the proxy dying (app.js just keeps rendering the
+ * last good /state it fetched), so a crash here looks like nothing happened
+ * for the rest of the broadcast. Every request routes through this one
+ * function, so one try/catch at the root covers every thrower underneath it.
+ */
+function handleRequest(req, res) {
+  let url;
+  try {
+    url = new URL(req.url, `http://localhost:${PORT}`);
+  } catch {
+    // e.g. `//:` — new URL() throws Invalid URL rather than parsing it.
+    return res.writeHead(400).end('bad request');
+  }
 
   if (url.pathname === '/state') {
     res.writeHead(200, {
       'content-type': 'application/json',
-      'cache-control': 'no-store',
-      'access-control-allow-origin': '*'
+      'cache-control': 'no-store'
+      // No access-control-allow-origin: the overlay is same-origin with this
+      // proxy and never needed it. Anything else is an uninvited reader of
+      // the operator's account id, which row is them, and live match status.
     });
     return res.end(JSON.stringify(current));
   }
 
   if (url.pathname === '/fixture') {
-    const match = JSON.parse(readFileSync('fixtures/active.sample.json', 'utf8'));
-    const history = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
+    const match = JSON.parse(readFileSync(new URL('active.sample.json', FIXTURES), 'utf8'));
+    const history = JSON.parse(readFileSync(new URL('match-history.sample.json', FIXTURES), 'utf8'));
     const stats = derivePlayer(history);
     const state = buildState({
       match,
-      steam: JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8')),
-      ranks: JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8')),
+      steam: JSON.parse(readFileSync(new URL('steam.sample.json', FIXTURES), 'utf8')),
+      ranks: JSON.parse(readFileSync(new URL('rank.sample.json', FIXTURES), 'utf8')),
       derived: new Map(match.players.map(p => [p.account_id, stats])),
       operatorId: ACCOUNT_ID || match.players[0].account_id
     });
@@ -111,11 +130,28 @@ const server = createServer((req, res) => {
   // Static overlay files. Resolution lives in proxy/static.js so the traversal
   // test imports the real function rather than a hand-copied duplicate of it.
   const file = resolveStatic(url.pathname);
-  if (existsSync(file)) {
-    res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
-    return res.end(readFileSync(file));
+  let stat;
+  try {
+    stat = statSync(file);
+  } catch {
+    return res.writeHead(404).end('not found');
   }
-  res.writeHead(404).end('not found');
+  // GET /logo resolves to a directory, not a file — readFileSync on it
+  // throws EISDIR. A directory is a legitimate 404, not a traversal escape.
+  if (!stat.isFile()) return res.writeHead(404).end('not found');
+
+  res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
+  res.end(readFileSync(file));
+}
+
+export const server = createServer((req, res) => {
+  try {
+    handleRequest(req, res);
+  } catch (err) {
+    console.error('[http]', err.message);
+    if (!res.headersSent) res.writeHead(500);
+    res.end('internal error');
+  }
 });
 
 // Only bind the port and start polling when this file is run directly (`npm
@@ -124,7 +160,11 @@ const server = createServer((req, res) => {
 // loop open for the lifetime of the test process.
 const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
 if (isMain) {
-  server.listen(PORT, () => {
+  // Loopback only: OBS loads the overlay from this same machine. Binding
+  // every interface (the default with no host argument) exposes /state —
+  // the operator's account id, which roster row is them, live match status —
+  // plus every static file, to the whole LAN.
+  server.listen(PORT, '127.0.0.1', () => {
     console.log(`DSN proxy on http://localhost:${PORT}`);
     console.log(`  overlay   http://localhost:${PORT}/`);
     console.log(`  state     http://localhost:${PORT}/state`);
