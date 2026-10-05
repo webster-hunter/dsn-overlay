@@ -266,9 +266,15 @@ returning ~56px of vertical game pixels.
 which is 1.605 — not 16:9. A 16:9 game capture fitted to it left 92px of dead
 space. The layout is now solved from the gameplay outwards: 1920 − 320 = 1600
 wide, 1080 − 45 − 135 = 900 tall, which is 16:9 with no rounding, and the
-facecam is 16:9 at the new rail width too. The rail lost 83px, so Steam names
-truncate sooner; that was accepted deliberately in exchange for the game
-filling its area.
+facecam is 16:9 at the new rail width too.
+
+The rail lost 83px, which made Steam names truncate. Rather than accept that,
+player names were dropped from the board entirely in favour of **one hero icon
+per row** — it identifies a player the way the game itself does, it cannot
+truncate, and the reclaimed column went to the flap cells (15 × 20 → 22 × 30),
+making the board markedly more legible. Steam names survive only in the
+chiron's Matchup turn; avatars are no longer recorded or rendered at all, so
+the fixture now carries just `account_id` and `personaname`.
 
 **Rail vertical budget** — this arithmetic is load-bearing and an earlier draft got it wrong by
 underestimating the header and bands at 62px:
