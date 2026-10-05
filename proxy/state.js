@@ -1,0 +1,104 @@
+import { rankLabel, tierColor } from './rank.js';
+import { FACTIONS, TEAM0_IS_AMBER } from './config.js';
+
+const PLACEHOLDER_NAME = 'UNKNOWN';
+
+// Read directly rather than importing config.js's ACCOUNT_ID constant: that
+// constant is frozen the first time config.js is loaded by ANYTHING in the
+// process (ESM module instances are cached by resolved URL, and a relative
+// import strips any query string from the importer, so re-importing state.js
+// under a cache-busting query still resolves './config.js' to the same cached
+// instance). A direct env read stays correct across the process lifetime in
+// production (the var is set once at startup) and lets a test flip the
+// operator identity without needing to defeat module caching.
+function operatorId() {
+  return Number(process.env.DSN_ACCOUNT_ID ?? 0);
+}
+
+/** Shape-compatible zero value, so a player with no history still renders. */
+const EMPTY_DERIVED = {
+  form: ' '.repeat(11),
+  season: { wins: 0, losses: 0, text: '0-0' },
+  abandons: 0,
+  streak: { kind: null, n: 0 },
+  averages: { kd: 0, netWorth: 0, lastHits: 0, denies: 0, matchLen: 0 },
+  matches: 0
+};
+
+function indexBy(rows, key) {
+  const m = new Map();
+  for (const r of rows ?? []) if (r && key in r) m.set(r[key], r);
+  return m;
+}
+
+const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
+const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+
+function playerRow(p, steamById, rankById, derived) {
+  const prof = steamById.get(p.account_id);
+  const rk = rankById.get(p.account_id);
+  // Pre-derived by the caller so each 2.5MB history is released before the
+  // next is fetched. EMPTY_DERIVED keeps a missing entry renderable.
+  const d = derived.get(p.account_id) ?? EMPTY_DERIVED;
+  const kd = d.averages.kd;
+  return {
+    accountId: p.account_id,
+    // A private profile or an omitted batch row must not blank the board.
+    name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
+    avatar: prof?.avatarmedium ?? prof?.avatar ?? null,
+    heroId: p.hero_id ?? null,
+    isSelf: p.account_id === operatorId(),
+    form: d.form,
+    season: d.season.text,
+    abandons: String(d.abandons),
+    rank: rk ? rankLabel(rk.rank, rk.subrank) : 'UNRANKED',
+    rankColor: rk ? tierColor(rk.rank) : tierColor(-1),
+    kd: Number.isFinite(kd) ? kd.toFixed(1) : '∞',
+    streak: d.streak.kind ? `${d.streak.kind}${d.streak.n}` : '0',
+    netWorth: k(d.averages.netWorth),
+    lastHits: String(Math.round(d.averages.lastHits)),
+    denies: String(Math.round(d.averages.denies)),
+    matches: String(d.matches)
+  };
+}
+
+export function emptyState(reason = '') {
+  return {
+    phase: 'IDLE', matchId: null, reason,
+    factions: FACTIONS,
+    teams: [
+      { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
+      { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: [] }
+    ],
+    session: {}, generatedAt: Date.now()
+  };
+}
+
+export function buildState({ match, steam, ranks, derived, session = {}, now = Date.now() }) {
+  if (!match?.players?.length) return { ...emptyState('no active match'), generatedAt: now };
+
+  const steamById = indexBy(steam, 'account_id');
+  const rankById = indexBy(ranks, 'account_id');
+
+  const amberIdx = TEAM0_IS_AMBER ? 0 : 1;
+  const bucket = { amber: [], sapphire: [] };
+  for (const p of match.players) {
+    const side = p.team === amberIdx ? 'amber' : 'sapphire';
+    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map()));
+  }
+  // The operator is pinned first within their own faction — spec section 5.1.
+  for (const side of ['amber', 'sapphire']) {
+    bucket[side].sort((a, b) => Number(b.isSelf) - Number(a.isSelf));
+  }
+
+  return {
+    phase: 'MATCH',
+    matchId: match.match_id ?? null,
+    factions: FACTIONS,
+    teams: [
+      { faction: FACTIONS.amber, colorVar: '--team-amber', players: bucket.amber },
+      { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: bucket.sapphire }
+    ],
+    session, generatedAt: now
+  };
+}
