@@ -1,0 +1,218 @@
+[
+  {
+    "account_id": 900000008,
+    "badge": 113,
+    "rank": 11,
+    "subrank": 3,
+    "last_match": {
+      "match_id": 100000068,
+      "start_time": 1791155808,
+      "player_rank_initial_display_rank": 113,
+      "player_rank_initial_flat_progress": 71500,
+      "player_rank_final_flat_progress": 71200,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 3,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  },
+  {
+    "account_id": 900000005,
+    "badge": 113,
+    "rank": 11,
+    "subrank": 3,
+    "last_match": {
+      "match_id": 100000069,
+      "start_time": 1791156428,
+      "player_rank_initial_display_rank": 113,
+      "player_rank_initial_flat_progress": 70530,
+      "player_rank_final_flat_progress": 70230,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 3,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 1
+    }
+  },
+  {
+    "account_id": 900000003,
+    "badge": 112,
+    "rank": 11,
+    "subrank": 2,
+    "last_match": {
+      "match_id": 100000069,
+      "start_time": 1791156428,
+      "player_rank_initial_display_rank": 112,
+      "player_rank_initial_flat_progress": 70600,
+      "player_rank_final_flat_progress": 70300,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 4,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 1
+    }
+  },
+  {
+    "account_id": 900000006,
+    "badge": 114,
+    "rank": 11,
+    "subrank": 4,
+    "last_match": {
+      "match_id": 100000070,
+      "start_time": 1791156866,
+      "player_rank_initial_display_rank": 114,
+      "player_rank_initial_flat_progress": 73270,
+      "player_rank_final_flat_progress": 73570,
+      "player_rank_desired_progress_change": 300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 2,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 1
+    }
+  },
+  {
+    "account_id": 900000001,
+    "badge": 115,
+    "rank": 11,
+    "subrank": 5,
+    "last_match": {
+      "match_id": 100000066,
+      "start_time": 1791149825,
+      "player_rank_initial_display_rank": 115,
+      "player_rank_initial_flat_progress": 76080,
+      "player_rank_final_flat_progress": 76380,
+      "player_rank_desired_progress_change": 300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 5,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  },
+  {
+    "account_id": 900000002,
+    "badge": 115,
+    "rank": 11,
+    "subrank": 5,
+    "last_match": {
+      "match_id": 100000053,
+      "start_time": 1791089572,
+      "player_rank_initial_display_rank": 115,
+      "player_rank_initial_flat_progress": 80420,
+      "player_rank_final_flat_progress": 80850,
+      "player_rank_desired_progress_change": 430,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 5,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 10
+    }
+  },
+  {
+    "account_id": 900000012,
+    "badge": 112,
+    "rank": 11,
+    "subrank": 2,
+    "last_match": {
+      "match_id": 100000058,
+      "start_time": 1791099089,
+      "player_rank_initial_display_rank": 112,
+      "player_rank_initial_flat_progress": 70460,
+      "player_rank_final_flat_progress": 70760,
+      "player_rank_desired_progress_change": 300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 0,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  },
+  {
+    "account_id": 900000010,
+    "badge": 111,
+    "rank": 11,
+    "subrank": 1,
+    "last_match": {
+      "match_id": 100000065,
+      "start_time": 1791144970,
+      "player_rank_initial_display_rank": 111,
+      "player_rank_initial_flat_progress": 70300,
+      "player_rank_final_flat_progress": 70600,
+      "player_rank_desired_progress_change": 300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 2,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 1
+    }
+  },
+  {
+    "account_id": 900000004,
+    "badge": 114,
+    "rank": 11,
+    "subrank": 4,
+    "last_match": {
+      "match_id": 100000070,
+      "start_time": 1791156866,
+      "player_rank_initial_display_rank": 114,
+      "player_rank_initial_flat_progress": 72220,
+      "player_rank_final_flat_progress": 71920,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 5,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  },
+  {
+    "account_id": 900000007,
+    "badge": 111,
+    "rank": 11,
+    "subrank": 1,
+    "last_match": {
+      "match_id": 100000065,
+      "start_time": 1791144970,
+      "player_rank_initial_display_rank": 111,
+      "player_rank_initial_flat_progress": 70970,
+      "player_rank_final_flat_progress": 70670,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 3,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 3
+    }
+  },
+  {
+    "account_id": 900000011,
+    "badge": 114,
+    "rank": 11,
+    "subrank": 4,
+    "last_match": {
+      "match_id": 100000070,
+      "start_time": 1791156866,
+      "player_rank_initial_display_rank": 114,
+      "player_rank_initial_flat_progress": 72700,
+      "player_rank_final_flat_progress": 73000,
+      "player_rank_desired_progress_change": 300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 5,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  },
+  {
+    "account_id": 900000009,
+    "badge": 115,
+    "rank": 11,
+    "subrank": 5,
+    "last_match": {
+      "match_id": 100000067,
+      "start_time": 1791155527,
+      "player_rank_initial_display_rank": 115,
+      "player_rank_initial_flat_progress": 80980,
+      "player_rank_final_flat_progress": 80680,
+      "player_rank_desired_progress_change": -300,
+      "player_rank_initial_calibration_games": 0,
+      "player_rank_initial_demotion_protection_games": 1,
+      "player_rank_consumed_demotion_protection": false,
+      "player_rank_initial_win_streak": 0
+    }
+  }
+]
