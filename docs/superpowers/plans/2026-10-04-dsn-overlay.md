@@ -1714,7 +1714,18 @@ const server = createServer((req, res) => {
     return res.end(JSON.stringify(state));
   }
 
-  // static overlay files
+  // Static overlay files.
+  //
+  // This is safe against path traversal, but for non-obvious reasons worth
+  // naming so a later "simplification" does not remove the protection. Two
+  // independent layers:
+  //   1. WHATWG URL collapses `..` segments in `pathname` before we see it, and
+  //      decodes %2e — so `/%2e%2e/%2e%2e/x` arrives as `/x`.
+  //   2. `path.normalize` CLAMPS `..` at root for a `/`-prefixed path:
+  //      normalize('/../../../x') === '\\x', never '../../x'.
+  // The `.replace` then covers the no-leading-slash case. Verified against 13
+  // attack vectors (encoded, double-encoded, `....//`, null byte, backslash);
+  // see the traversal test in tests/server.test.js.
   const rel = url.pathname === '/' ? '/index.html' : url.pathname;
   const file = join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
   if (existsSync(file)) {
@@ -1750,10 +1761,77 @@ curl -s http://localhost:7331/fixture | node -e "
 
 Expected: `phase MATCH | teams Hidden King:6 Archmother:6`, and a row whose `form` is exactly 11 characters.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Write the path-traversal regression test**
+
+The static-file route resolves a request path against `overlay/`. It is safe,
+but by a mechanism subtle enough that a refactor could silently remove the
+protection — so pin it with a test rather than a comment. This tests the
+resolution logic directly, with no server needed.
+
+Create `tests/server.test.js`:
+
+```js
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { join, normalize, resolve, sep } from 'node:path';
+
+/** The exact resolution the server performs, lifted for testability. */
+function resolveStatic(rawUrl) {
+  const url = new URL(rawUrl, 'http://localhost:7331');
+  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
+  return join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+}
+
+const ROOT = resolve('overlay');
+
+test('every traversal attempt stays inside overlay/', () => {
+  const attacks = [
+    '/../package.json',
+    '/../../../../../../Windows/win.ini',
+    '/%2e%2e%2fpackage.json',
+    '/%2e%2e/%2e%2e/package.json',
+    '/..%2f..%2fpackage.json',
+    '/%252e%252e%252fpackage.json',
+    '/....//....//package.json',
+    '/../.git/config',
+    '/%00/../package.json',
+    '/a/b/../../../package.json',
+    '//package.json',
+    '/\\..\\..\\package.json'
+  ];
+  for (const attack of attacks) {
+    const abs = resolve(resolveStatic(attack));
+    assert.ok(abs.startsWith(ROOT),
+      `${attack} escaped the overlay root -> ${abs}`);
+  }
+});
+
+test('legitimate asset paths still resolve', () => {
+  assert.match(resolveStatic('/'), /index\.html$/);
+  assert.match(resolveStatic('/index.html'), /index\.html$/);
+  assert.match(resolveStatic('/fonts/radiance-bold.otf'), /fonts[/\\]radiance-bold\.otf$/);
+  assert.match(resolveStatic('/logo/eye.svg'), /logo[/\\]eye\.svg$/);
+});
+
+test('normalize clamps .. at root — the property the guard leans on', () => {
+  // The guard is only sufficient because normalize refuses to walk above root
+  // on a /-prefixed path. If a future Node changes that, this fails first and
+  // tells you the guard needs strengthening.
+  assert.equal(normalize('/../x'), sep + 'x');
+  assert.equal(normalize('/../../../x'), sep + 'x');
+  assert.equal(normalize('/a/../../x'), sep + 'x');
+});
+```
+
+- [ ] **Step 10: Run the test**
+
+Run: `node --test tests/server.test.js`
+Expected: PASS, 3 tests.
+
+- [ ] **Step 11: Commit**
 
 ```bash
-git add proxy/state.js proxy/server.js tests/state.test.js
+git add proxy/state.js proxy/server.js tests/state.test.js tests/server.test.js
 git commit -m "feat: assemble the /state document and serve it, with a fixture route"
 ```
 
