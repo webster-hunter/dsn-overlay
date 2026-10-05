@@ -59,7 +59,39 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 /* the stat name is the column header for right-justified values, so it
    shares their right edge — spec section 5.1 */
 .flaprow { display: flex; gap: 2px; justify-content: flex-end; }
-#board { flex: 1; min-height: 0; overflow: hidden; }
+/* Chat owns the rail below the facecam. A live stat board cannot be filled —
+   see the note in overlay/chat.js — so this is the rail's purpose, not a
+   fallback for one. */
+#chat { flex: 1; min-height: 0; overflow: hidden; background: #0E0B06; position: relative; }
+#chat-lines {
+  height: 100%; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; scrollbar-width: none;
+}
+#chat-lines::-webkit-scrollbar { display: none; }
+.chat-line {
+  /* Radiance is Deadlock's own UI face, vendored in overlay/fonts. Stated
+     explicitly rather than inherited, so chat keeps the game's type even if the
+     body font is ever retuned. */
+  font-family: "Radiance", system-ui, sans-serif; font-weight: 600;
+  font-size: 15px; line-height: 1.4; word-wrap: break-word; overflow-wrap: anywhere;
+  color: var(--base-text); flex: none;
+  /* rises in like the chiron groups, so chat reads as part of the broadcast */
+  animation: chat-in .22s cubic-bezier(.22,.68,.3,1) both;
+}
+@keyframes chat-in { from { opacity: 0; transform: translateY(40%); } }
+.chat-nick { font-family: "Radiance", system-ui, sans-serif; font-weight: 700; }
+.chat-nick::after { content: ""; display: inline-block; width: 6px; }
+.chat-text { color: #D8CDBA; }
+.chat-empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px; padding: 0 18px; text-align: center;
+}
+.chat-empty-title {
+  font-family: "Reaver", "Radiance", sans-serif; font-weight: 700;
+  font-size: 17px; color: var(--color-gold); letter-spacing: .04em;
+}
+.chat-empty-body { font-size: 12px; color: #8A8071; line-height: 1.4; }
 
 #chiron {
   height: var(--chiron-height); flex: none; display: flex;

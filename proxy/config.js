@@ -18,9 +18,13 @@ export const ACCOUNT_ID = toAccountId(process.env.DSN_ACCOUNT_ID);
  * Both are optional — the bar keeps its height either way, because that height
  * is what makes the gameplay area 16:9.
  */
+/** Twitch channel whose chat fills the right rail. Empty renders a placeholder. */
+export const TWITCH_CHANNEL = (process.env.DSN_TWITCH_CHANNEL ?? '').trim();
+
 export const STREAMER = Object.fromEntries(Object.entries({
   name: process.env.DSN_STREAMER_NAME ?? '',
-  tagline: process.env.DSN_STREAMER_TAGLINE ?? ''
+  tagline: process.env.DSN_STREAMER_TAGLINE ?? '',
+  twitch: TWITCH_CHANNEL
 }).filter(([, v]) => v.trim() !== ''));
 
 /**

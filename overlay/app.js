@@ -1,5 +1,5 @@
 import { mountLogo, turnLogo } from './logo.js';
-import { mountBoard, renderBoard, showMode } from './board.js';
+import { mountChat } from './chat.js';
 import { mountChiron, renderTurn } from './chiron.js';
 import { mountMachine, nextTransition, runTransition } from './machine.js';
 
@@ -11,7 +11,6 @@ const POLL_MS = 2000;
 
 const mark = await mountLogo(el('logo-bay'));
 await mountLogo(el('ident'));                    // a second mark for the ident
-mountBoard(el('board'), el('stat-name'));
 mountChiron({ spine: el('spine'), groups: el('groups'), persistent: el('persistent') });
 mountMachine({ veil: el('veil'), ident: el('ident') });
 
@@ -24,8 +23,17 @@ function renderStreamer(doc) {
   el('streamer-tagline').textContent = doc?.streamer?.tagline ?? '';
 }
 
+// Chat is static for the session: mounting it again would reload the iframe and
+// wipe the scrollback, so it happens once on the first document.
+let chatMounted = false;
+function ensureChat(doc) {
+  if (chatMounted) return;
+  chatMounted = true;
+  mountChat(el('chat'), doc?.streamer?.twitch ?? '');
+}
+
 let state = null;
-let mode = 0, turn = 0;
+let turn = 0;
 
 // The ident fully covers the frame only inside its full-cover plateau: the
 // mark's grow holds its peak 40–60%, the veil is opaque 34–62%, the ident
@@ -70,8 +78,7 @@ async function doPoll() {
     const swap = () => {
       state = next;
       renderStreamer(state);
-      renderBoard(state, el('board'));
-      showMode(mode);
+      ensureChat(state);
       renderTurn(state, turn);
     };
     // the ident fully covers the frame, so swap under it at the peak
@@ -80,8 +87,7 @@ async function doPoll() {
   } else if (!state) {
     state = next;
     renderStreamer(state);
-    renderBoard(state, el('board'));
-    showMode(mode);
+    ensureChat(state);
     renderTurn(state, turn);
   } else {
     state = next;
@@ -90,5 +96,4 @@ async function doPoll() {
 
 await poll();
 setInterval(poll, POLL_MS);
-setInterval(() => { if (state) showMode(++mode); }, 9000);
 setInterval(() => { if (!state) return; renderTurn(state, ++turn); turnLogo(mark); }, 9000);
