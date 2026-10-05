@@ -51,7 +51,7 @@ async function refresh() {
       return true;
     });
 
-    const state = buildState({ match, steam, ranks, derived });
+    const state = buildState({ match, steam, ranks, derived, operatorId: ACCOUNT_ID });
     matchCache.set(key, state);
     current = state;
   } catch (err) {
@@ -80,7 +80,8 @@ const server = createServer((req, res) => {
       match,
       steam: JSON.parse(readFileSync('fixtures/steam.sample.json', 'utf8')),
       ranks: JSON.parse(readFileSync('fixtures/rank.sample.json', 'utf8')),
-      derived: new Map(match.players.map(p => [p.account_id, stats]))
+      derived: new Map(match.players.map(p => [p.account_id, stats])),
+      operatorId: ACCOUNT_ID
     });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify(state));

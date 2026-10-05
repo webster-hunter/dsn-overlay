@@ -3,18 +3,6 @@ import { FACTIONS, TEAM0_IS_AMBER } from './config.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
 
-// Read directly rather than importing config.js's ACCOUNT_ID constant: that
-// constant is frozen the first time config.js is loaded by ANYTHING in the
-// process (ESM module instances are cached by resolved URL, and a relative
-// import strips any query string from the importer, so re-importing state.js
-// under a cache-busting query still resolves './config.js' to the same cached
-// instance). A direct env read stays correct across the process lifetime in
-// production (the var is set once at startup) and lets a test flip the
-// operator identity without needing to defeat module caching.
-function operatorId() {
-  return Number(process.env.DSN_ACCOUNT_ID ?? 0);
-}
-
 /** Shape-compatible zero value, so a player with no history still renders. */
 const EMPTY_DERIVED = {
   form: ' '.repeat(11),
@@ -34,7 +22,7 @@ function indexBy(rows, key) {
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
-function playerRow(p, steamById, rankById, derived) {
+function playerRow(p, steamById, rankById, derived, operatorId) {
   const prof = steamById.get(p.account_id);
   const rk = rankById.get(p.account_id);
   // Pre-derived by the caller so each 2.5MB history is released before the
@@ -47,7 +35,7 @@ function playerRow(p, steamById, rankById, derived) {
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
     avatar: prof?.avatarmedium ?? prof?.avatar ?? null,
     heroId: p.hero_id ?? null,
-    isSelf: p.account_id === operatorId(),
+    isSelf: operatorId > 0 && p.account_id === operatorId,
     form: d.form,
     season: d.season.text,
     abandons: String(d.abandons),
@@ -74,7 +62,9 @@ export function emptyState(reason = '') {
   };
 }
 
-export function buildState({ match, steam, ranks, derived, session = {}, now = Date.now() }) {
+export function buildState({
+  match, steam, ranks, derived, operatorId = 0, session = {}, now = Date.now()
+}) {
   if (!match?.players?.length) return { ...emptyState('no active match'), generatedAt: now };
 
   const steamById = indexBy(steam, 'account_id');
@@ -84,7 +74,7 @@ export function buildState({ match, steam, ranks, derived, session = {}, now = D
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map()));
+    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map(), operatorId));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {

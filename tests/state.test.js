@@ -82,18 +82,19 @@ test('a player with no history at all still renders', () => {
   }
 });
 
-test('the operator is pinned first in their own faction', async () => {
-  // ACCOUNT_ID is read from the environment when config.js is first loaded,
-  // so it must be set BEFORE the dynamic import — and this test needs its own
-  // module instance, which is why it imports rather than using the top-level
-  // buildState. Without this the assertion is vacuous: nobody is ever isSelf.
+test('the operator is pinned first in their own faction', () => {
+  // operatorId is an argument, so this needs no env var and no module-cache
+  // trickery. An earlier draft tried `import('../proxy/state.js?bust=1')` after
+  // setting process.env — that does not work: the query re-evaluates state.js
+  // but its relative import of ./config.js resolves to the already-cached URL,
+  // so ACCOUNT_ID stayed frozen at 0 and the assertion failed. Verified
+  // empirically. Passing the id in is both simpler and actually correct.
   const target = match.players[4].account_id;
-  process.env.DSN_ACCOUNT_ID = String(target);
-  const fresh = await import(`../proxy/state.js?selftest=${target}`);
+  const s = buildState({
+    match, steam, ranks, derived: fullDerived, operatorId: target, session: {}, now: 1
+  });
 
-  const s = fresh.buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
   const all = s.teams.flatMap(t => t.players);
-
   const selves = all.filter(p => p.isSelf);
   assert.equal(selves.length, 1, 'exactly one row must be flagged as the operator');
   assert.equal(selves[0].accountId, target);
@@ -102,6 +103,15 @@ test('the operator is pinned first in their own faction', async () => {
   assert.equal(owning.players[0].isSelf, true,
     'the operator must be row 0 of their own faction, not merely present');
   assert.equal(owning.players.length, 6, 'pinning must not change the faction size');
+});
 
-  delete process.env.DSN_ACCOUNT_ID;
+test('with no operatorId, nobody is flagged — and nothing is reordered', () => {
+  // The unconfigured case. It must not silently pick a row, and it must not
+  // crash: the overlay still renders a full 12-row board with no YOU tag.
+  const s = buildState({ match, steam, ranks, derived: fullDerived, session: {}, now: 1 });
+  const all = s.teams.flatMap(t => t.players);
+  assert.equal(all.length, 12);
+  assert.equal(all.filter(p => p.isSelf).length, 0, 'no row may claim to be the operator');
+  assert.equal(s.teams[0].players.length, 6);
+  assert.equal(s.teams[1].players.length, 6);
 });
