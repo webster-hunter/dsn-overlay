@@ -599,7 +599,24 @@ git commit -m "feat: rank tier formatting with safe fallback for unknown tiers"
 
 **Two API behaviours this task exists to encode correctly.** Both were measured against 4,348 real entries and both are counter-intuitive:
 
-1. **`player_match_outcome` is unusable.** It is `0` on 3,951 of 4,348 entries (91%) — effectively unpopulated. Win/loss must be derived as **`player_team === match_result`**. Cross-tabulating confirms it: where the two fields are equal the outcome is never `2`; where they differ it is never `1`. That derivation gives a 54.5% win rate for the sample player.
+1. **`player_match_outcome` is not a reliable win/loss flag.** Two separate
+   measurements, which disagree in an instructive way:
+   - Over one player's **full** 4,348-entry history it is `0` (unset) on 3,951
+     rows — 91%. Older matches predate the field being populated.
+   - Over the **60 most recent** matches in `fixtures/match-history.sample.json`
+     it is `0` on only 1 of 63 rows, and `outcome === 1` agrees with
+     `player_team === match_result` on every row.
+
+   So it is populated for recent matches and absent for old ones — which is
+   precisely why it cannot be the derivation. A player's season record spans
+   both eras. It also carries values beyond `0/1/2`: the fixture contains
+   **3 and 5**, whose meanings are undocumented, so it is not a boolean even
+   where present.
+
+   Win/loss must therefore be derived as **`player_team === match_result`**,
+   which needs no knowledge of the enum and works across both eras. Cross-tabs
+   from both samples agree with it: where the two fields are equal the outcome
+   is never `2`, and where they differ it is never `1`.
 2. **`abandoned_time_s` uses `0` as a sentinel, not `null`.** Across 4,348 entries: `null` 3,270 times, `0` 1,074 times, and non-zero only **4** times. Treating "non-null" as an abandon — which the spec's prose implies — would report 1,074 abandons instead of 4. The test below pins this.
 
 **Abandons are counted over the full history, not a 20-match window.** At a 0.09% base rate a 20-match window expects 0.018 abandons per player, so a windowed column reads `0` for all 12 players almost always. An all-time integer is informative. This adjusts spec §5.4 and is the one place this plan departs from it.
@@ -634,10 +651,25 @@ test('a win is player_team === match_result', () => {
   assert.equal(isWin(e({ player_team: 1, match_result: 0 })), false);
 });
 
-test('player_match_outcome is NOT used — it is 0 on ~91% of real entries', () => {
-  // an entry whose outcome field disagrees with the team/result pair
+test('player_match_outcome is never consulted, even when it contradicts', () => {
+  // An entry whose outcome field disagrees with the team/result pair. The
+  // derivation must ignore it: outcome is unset on 91% of a long history and
+  // is not a boolean where it is set.
   const misleading = e({ player_team: 0, match_result: 0, player_match_outcome: 2 });
   assert.equal(isWin(misleading), true, 'must trust player_team === match_result');
+
+  const alsoMisleading = e({ player_team: 0, match_result: 1, player_match_outcome: 1 });
+  assert.equal(isWin(alsoMisleading), false, 'a 1 must not override a team/result mismatch');
+});
+
+test('the real fixture shows why outcome cannot be treated as a boolean', () => {
+  const outcomes = new Set(REAL.map(r => r.player_match_outcome));
+  // Observed in fixtures/match-history.sample.json: 0, 1, 2, 3 and 5. Anyone
+  // tempted to "simplify" isWin to `outcome === 1` should see this fail to be
+  // a two-valued field first.
+  const beyondBoolean = [...outcomes].filter(v => v !== undefined && v > 2);
+  assert.ok(beyondBoolean.length > 0,
+    `expected outcome values above 2; got ${[...outcomes].join(',')}`);
 });
 ```
 
@@ -664,10 +696,14 @@ export function isScored(entry) {
 /**
  * Win iff the player's team is the winning team.
  *
- * Do NOT use `player_match_outcome`: measured over 4,348 live entries it is 0
- * (unset) on 91% of them. Cross-tab confirms this derivation — where
- * player_team === match_result the outcome is never 2, and where they differ
- * it is never 1.
+ * Do NOT substitute `player_match_outcome`. It looks tempting because on recent
+ * matches `outcome === 1` tracks this exactly — but it is unset (0) on 91% of a
+ * 4,348-entry history, because older matches predate the field, and a season
+ * record spans both eras. It is also not boolean where it IS set: the recorded
+ * fixture contains outcome values 3 and 5 alongside 0/1/2, with undocumented
+ * meanings. Comparing team to result needs no enum knowledge and holds
+ * everywhere. Cross-tabs over both a 4,348-entry and a 63-entry sample agree:
+ * where the two are equal the outcome is never 2, where they differ never 1.
  */
 export function isWin(entry) {
   return isScored(entry) && entry.player_team === entry.match_result;
