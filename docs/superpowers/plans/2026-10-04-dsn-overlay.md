@@ -3081,6 +3081,12 @@ git commit -m "feat: degrade to last-known-good state on every failure path"
 
 Not a build task, but the plan is not done until the thing runs where it is meant to.
 
+**Requires OBS Studio 31.0 or newer.** Older builds bundle a CEF whose Chromium
+predates `color-mix()` (Chromium 111) and `:has()` (105), and the failure mode is
+silent: the faction bands render **invisible** with no console error. Current
+stable OBS is 32.2.2 (Chromium 127), comfortably past both. Check via
+*Help → About*.
+
 1. `npm run serve` with `DSN_ACCOUNT_ID` set to your SteamID3 numeric part.
 2. In OBS, add a **Browser Source**: URL `http://localhost:7331/`, width `1920`, height `1080`, and **uncheck** "Shutdown source when not visible" so the page is not reloaded on every scene switch.
 3. Add your **Game Capture** *below* the browser source in the source list, and scale it to `1517 × 945` positioned at `0, 0` — the transparent region the overlay leaves for it.
