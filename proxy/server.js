@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { extname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
 import { buildState, emptyState, fallbackState } from './state.js';
 import { derivePlayer } from './derive.js';
@@ -19,7 +20,7 @@ const MIME = {
   '.svg': 'image/svg+xml', '.otf': 'font/otf'
 };
 
-let current = emptyState('starting');
+export let current = emptyState('starting');
 
 /** Fetch and reduce. Raw histories are discarded immediately — 12 x 2.5MB
  *  must never all be held at once. */
@@ -42,7 +43,7 @@ async function refresh() {
   }
 }
 
-async function doRefresh() {
+export async function doRefresh() {
   // An unconfigured ACCOUNT_ID is 0, and /v1/matches/active IGNORES a falsy
   // account_id filter — it returns the whole 150-match watch list. Polling
   // unguarded would pick a stranger's match, fetch twelve strangers' histories
@@ -117,21 +118,28 @@ const server = createServer((req, res) => {
   res.writeHead(404).end('not found');
 });
 
-server.listen(PORT, () => {
-  console.log(`DSN proxy on http://localhost:${PORT}`);
-  console.log(`  overlay   http://localhost:${PORT}/`);
-  console.log(`  state     http://localhost:${PORT}/state`);
-  console.log(`  fixture   http://localhost:${PORT}/fixture   (no game needed)`);
-  if (!ACCOUNT_ID) {
-    console.warn('');
-    console.warn('  !! DSN_ACCOUNT_ID is not set. /state will stay IDLE and no');
-    console.warn('     live match will be detected. Use /fixture to develop the');
-    console.warn('     overlay without a game running.');
-    console.warn('     Set it to your SteamID3 numeric part, e.g.');
-    console.warn('       DSN_ACCOUNT_ID=123456789 npm run serve');
-    console.warn('');
-  }
-});
+// Only bind the port and start polling when this file is run directly (`npm
+// run serve`), not when a test imports it for `doRefresh`/`current` — an
+// import-time listen() + setInterval() would hold the port and the event
+// loop open for the lifetime of the test process.
+const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+if (isMain) {
+  server.listen(PORT, () => {
+    console.log(`DSN proxy on http://localhost:${PORT}`);
+    console.log(`  overlay   http://localhost:${PORT}/`);
+    console.log(`  state     http://localhost:${PORT}/state`);
+    console.log(`  fixture   http://localhost:${PORT}/fixture   (no game needed)`);
+    if (!ACCOUNT_ID) {
+      console.warn('');
+      console.warn('  !! DSN_ACCOUNT_ID is not set. /state will stay IDLE and no');
+      console.warn('     live match will be detected. Use /fixture to develop the');
+      console.warn('     overlay without a game running.');
+      console.warn('     Set it to your SteamID3 numeric part, e.g.');
+      console.warn('       DSN_ACCOUNT_ID=123456789 npm run serve');
+      console.warn('');
+    }
+  });
 
-refresh();
-setInterval(refresh, POLL_MS);
+  refresh();
+  setInterval(refresh, POLL_MS);
+}

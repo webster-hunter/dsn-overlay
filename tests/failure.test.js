@@ -27,6 +27,22 @@ test('a fallback with no previous state is still renderable', () => {
   assert.equal(f.teams.length, 2);
 });
 
+test('a fallback from a cold-start document with no player rows refreshes generatedAt rather than freezing it', () => {
+  // teams.length is 2 on every document this codebase emits, emptyState
+  // included, so checking THAT tells fallbackState nothing about whether
+  // there is a real roster to preserve. Pin a sentinel generatedAt far in
+  // the past on a player-less "previous" doc (exactly what `current` holds
+  // on a cold start) and confirm the fallback does NOT just spread it
+  // forward — that would freeze the clock on the starting placeholder
+  // forever instead of refreshing it on every failed tick.
+  const cold = { ...emptyState('starting'), generatedAt: 1 };
+  const f = fallbackState(cold, 'api down');
+  assert.equal(f.teams[0].players.length, 0);
+  assert.equal(f.teams[1].players.length, 0);
+  assert.equal(f.stale, true);
+  assert.notEqual(f.generatedAt, 1, 'generatedAt must not freeze on a cold start with no previous roster');
+});
+
 test('no state document ever contains undefined, NaN or null names', () => {
   for (const doc of [good, emptyState('x'), fallbackState(good, 'y'), fallbackState(null, 'z')]) {
     const json = JSON.stringify(doc);
@@ -35,12 +51,14 @@ test('no state document ever contains undefined, NaN or null names', () => {
   }
 });
 
-test('malformed upstream payloads degrade instead of throwing', () => {
-  for (const bad of [{}, { players: [] }, { players: null }, null, undefined]) {
-    const doc = buildState({ match: bad, steam: [], ranks: [], derived: new Map() });
-    assert.equal(doc.phase, 'IDLE');
-    assert.equal(doc.teams.length, 2);
-  }
+test('a malformed match payload degrades to IDLE instead of throwing', () => {
+  // {}, { players: [] }, { players: null }, null and undefined are all
+  // indistinguishable to buildState: every one trips the same
+  // `!match?.players?.length` guard. Pinning one representative case rather
+  // than five that can only pass or fail together.
+  const doc = buildState({ match: undefined, steam: [], ranks: [], derived: new Map() });
+  assert.equal(doc.phase, 'IDLE');
+  assert.equal(doc.teams.length, 2);
 });
 
 test('garbage in the batch responses does not break the board', () => {

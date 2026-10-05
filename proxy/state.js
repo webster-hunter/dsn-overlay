@@ -107,7 +107,11 @@ export function buildState({
  * because a real network never captions which feed failed.
  */
 export function fallbackState(previous, reason = '') {
-  if (previous?.teams?.length) {
+  // teams.length is always 2 — emptyState included — so checking it tells us
+  // nothing about whether `previous` actually carries a roster. Check for a
+  // player row instead, or a cold-start failure freezes generatedAt on the
+  // starting placeholder forever instead of refreshing it each tick.
+  if (previous?.teams?.some(t => t.players?.length)) {
     return { ...previous, stale: true, reason };
   }
   return { ...emptyState(reason), stale: true };
