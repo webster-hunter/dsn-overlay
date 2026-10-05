@@ -1859,6 +1859,43 @@ test('every traversal attempt stays inside overlay/', () => {
   }
 });
 
+test('mapLimited bounds concurrency and isolates per-item failures', async () => {
+  // mapLimited is what keeps the 18.5MB match assembly from arriving at once
+  // and what stops one failing history losing the other eleven. It had no test
+  // of either property; this task is its first caller, so it gets one here.
+  const { mapLimited } = await import('../proxy/deadlock.js');
+
+  let inFlight = 0, peak = 0;
+  const ids = Array.from({ length: 12 }, (_, i) => i + 1);
+
+  const out = await mapLimited(ids, async id => {
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await new Promise(r => setTimeout(r, 5));
+    inFlight--;
+    if (id === 5) throw new Error('simulated upstream failure');
+    return `ok-${id}`;
+  }, 3);
+
+  assert.ok(peak <= 3, `concurrency exceeded the limit: peaked at ${peak}`);
+  assert.equal(out.size, 12, 'every id must appear in the result');
+  assert.equal(out.get(5), null, 'the failing id maps to null');
+  assert.equal([...out.values()].filter(v => v !== null).length, 11,
+    'one failure must not lose the other eleven');
+});
+
+test('mapLimited never spawns more workers than it has items', async () => {
+  const { mapLimited } = await import('../proxy/deadlock.js');
+  let peak = 0, inFlight = 0;
+  const out = await mapLimited([1, 2], async id => {
+    inFlight++; peak = Math.max(peak, inFlight);
+    await new Promise(r => setTimeout(r, 5));
+    inFlight--; return id;
+  }, 10);
+  assert.equal(out.size, 2);
+  assert.ok(peak <= 2, `spawned ${peak} workers for 2 items`);
+});
+
 test('an unset account id must never be sent to the active-match filter', async () => {
   // /v1/matches/active ignores a falsy account_id and returns the whole
   // 150-match watch list, so an unguarded poll would render a stranger's game.
