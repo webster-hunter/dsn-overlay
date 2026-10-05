@@ -30,9 +30,12 @@ export const POLL_MS = 15_000;          // match detection
  * 111 MB for data that could not have changed, against a stated constraint of
  * "fetch once per match, never poll".
  *
- * The TTL survives only to bound memory across a long session (one small entry
- * per match_id), not to refresh anything. Match END is detected by the 15s
- * poll of /matches/active, not by this expiring.
+ * The TTL gates REUSE, not memory: makeCache has get/set/stale and no eviction
+ * path, so an expired entry is re-fetched but never removed. The Map grows one
+ * small entry per match_id for the process lifetime — measured at roughly
+ * 300 KB across a 20-match stream, which is why no eviction is warranted.
+ * Match END is detected by the 15s poll of /matches/active, not by this
+ * expiring.
  */
 export const MATCH_TTL_MS = 90 * 60_000;
 export const CONTEXT_TTL_MS = 60 * 60_000;
