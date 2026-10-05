@@ -1,12 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join, normalize, resolve, sep } from 'node:path';
+import { resolve, normalize, sep } from 'node:path';
+// The REAL resolver, not a copy. A hand-duplicated one could diverge from the
+// route silently, which would defeat the purpose of this entire test file.
+import { resolveStatic as resolveFile } from '../proxy/static.js';
 
-/** The exact resolution the server performs, lifted for testability. */
+/** Mirror the server's URL parsing, then hand off to the real resolver. */
 function resolveStatic(rawUrl) {
   const url = new URL(rawUrl, 'http://localhost:7331');
-  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-  return join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  return resolveFile(url.pathname);
 }
 
 const ROOT = resolve('overlay');

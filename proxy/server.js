@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import { extname } from 'node:path';
+import { resolveStatic } from './static.js';
 import { buildState, emptyState } from './state.js';
 import { derivePlayer } from './derive.js';
 import { makeCache } from './cache.js';
@@ -87,20 +88,9 @@ const server = createServer((req, res) => {
     return res.end(JSON.stringify(state));
   }
 
-  // Static overlay files.
-  //
-  // This is safe against path traversal, but for non-obvious reasons worth
-  // naming so a later "simplification" does not remove the protection. Two
-  // independent layers:
-  //   1. WHATWG URL collapses `..` segments in `pathname` before we see it, and
-  //      decodes %2e — so `/%2e%2e/%2e%2e/x` arrives as `/x`.
-  //   2. `path.normalize` CLAMPS `..` at root for a `/`-prefixed path:
-  //      normalize('/../../../x') === '\\x', never '../../x'.
-  // The `.replace` then covers the no-leading-slash case. Verified against 13
-  // attack vectors (encoded, double-encoded, `....//`, null byte, backslash);
-  // see the traversal test in tests/server.test.js.
-  const rel = url.pathname === '/' ? '/index.html' : url.pathname;
-  const file = join('overlay', normalize(rel).replace(/^(\.\.[/\\])+/, ''));
+  // Static overlay files. Resolution lives in proxy/static.js so the traversal
+  // test imports the real function rather than a hand-copied duplicate of it.
+  const file = resolveStatic(url.pathname);
   if (existsSync(file)) {
     res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
     return res.end(readFileSync(file));
