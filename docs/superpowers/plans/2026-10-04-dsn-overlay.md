@@ -352,6 +352,31 @@ test('rank fixture carries tier and subrank', () => {
   assert.equal(typeof r.rank, 'number');
   assert.equal(typeof r.subrank, 'number');
 });
+
+test('steam fixture carries what the board renders', () => {
+  const rows = load('steam.sample.json');
+  assert.equal(rows.length, 12);
+  for (const r of rows) {
+    assert.equal(typeof r.account_id, 'number');
+    assert.equal(typeof r.personaname, 'string');
+    assert.ok(r.personaname.length > 0, 'a name must never be empty');
+  }
+});
+
+test('steam fixture commits no unused personal data', () => {
+  // The live endpoint also returns `friends` (1,000+ {account_id, friend_since}
+  // records across one roster), `realname` and `countrycode`. The overlay reads
+  // none of them, and committing them would put a social graph of third parties
+  // who were never in the match into git history permanently. The recorder
+  // projects the response; this stops that projection being dropped.
+  const allowed = new Set(['account_id', 'personaname', 'avatar', 'avatarmedium']);
+  for (const row of load('steam.sample.json')) {
+    for (const key of Object.keys(row)) {
+      assert.ok(allowed.has(key),
+        `steam fixture leaked "${key}" — the recorder must project to ${[...allowed].join(', ')}`);
+    }
+  }
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -386,12 +411,31 @@ console.log('active.sample.json      match', match.match_id);
 
 const ids = match.players.map(p => p.account_id);
 
-// 2 + 3. batch profile and rank for that roster
+// 2 + 3. batch profile and rank for that roster.
+//
+// The steam endpoint returns far more than the overlay consumes: `friends`
+// (an array of {account_id, friend_since} — over a thousand records across a
+// single roster), plus `realname` and `countrycode`. None of it is read by any
+// code in this project, and committing it would put a social graph of ~1,000
+// third parties who were never in the match into git history permanently.
+// So project down to exactly the fields the overlay uses.
+const STEAM_FIELDS = ['account_id', 'personaname', 'avatar', 'avatarmedium'];
+const pick = (row, fields) =>
+  Object.fromEntries(fields.filter(f => f in row).map(f => [f, row[f]]));
+
+const steamRaw = await get(`/players/steam?account_ids=${ids.join(',')}`);
 writeFileSync('fixtures/steam.sample.json',
-  JSON.stringify(await get(`/players/steam?account_ids=${ids.join(',')}`), null, 2));
+  JSON.stringify(steamRaw.map(r => pick(r, STEAM_FIELDS)), null, 2));
+
+// rank carries no personal data beyond the id, but `last_match` is a large
+// nested object the fixtures never read.
+const RANK_FIELDS = ['account_id', 'badge', 'rank', 'subrank'];
+const rankRaw = await get(`/players/rank?account_ids=${ids.join(',')}`);
 writeFileSync('fixtures/rank.sample.json',
-  JSON.stringify(await get(`/players/rank?account_ids=${ids.join(',')}`), null, 2));
-console.log('steam/rank.sample.json  12 players');
+  JSON.stringify(rankRaw.map(r => pick(r, RANK_FIELDS)), null, 2));
+
+console.log(`steam/rank.sample.json  12 players (projected to `
+          + `${STEAM_FIELDS.length}/${RANK_FIELDS.length} fields)`);
 
 // 4. one player's history, down-sampled but keeping every abandon
 const subject = ids[0];
