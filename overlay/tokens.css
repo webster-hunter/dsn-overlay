@@ -216,7 +216,10 @@
      but driven by events so the browser source can idle between them. */
   --mark-step: 36deg;
   --mark-turn-dur: .5s;
-  --mark-blink: 10s;
+  /* The blink is fired on each chiron turn rather than on a 10s loop, so it
+     is a duration now, not an interval. .6s is the span the old keyframe
+     actually spent blinking (94%-100% of 10s). */
+  --mark-blink-dur: .6s;
   --xition-sweep: 1.1s;
   --xition-ident: 1.9s;
 

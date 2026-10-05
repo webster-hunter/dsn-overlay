@@ -21,14 +21,34 @@ export async function mountLogo(host) {
     layer.innerHTML = toCurrentColor(svgs[i]);
     mark.appendChild(layer);
   });
+  mark.addEventListener('animationend', onMarkAnimEnd);
+  mark.addEventListener('animationcancel', onMarkAnimEnd);
   host.replaceChildren(mark);
   return mark;
 }
 
 /**
- * The mark's resting angle. Both kinds of movement advance it rather than
- * rotating from zero, so the mark carries on from wherever it stopped instead
- * of snapping back between turns.
+ * Every movement is a one-shot class. One listener per mark, attached at mount,
+ * strips the class when that class's own animation ends or is cancelled — so
+ * nothing races a hardcoded duration and no listener is ever added again.
+ */
+const ONE_SHOT = { 'mark-turn': 'turn', 'mark-blink': 'blink', 'mark-sweep': 'sweep' };
+
+function onMarkAnimEnd(e) {
+  const cls = ONE_SHOT[e.animationName];
+  if (cls) e.currentTarget.classList.remove(cls);
+}
+
+function play(mark, cls) {
+  mark.classList.remove(cls);
+  void mark.offsetWidth;            // force reflow so the animation restarts
+  mark.classList.add(cls);
+}
+
+/**
+ * The mark's resting angle. Both kinds of rotation advance it rather than
+ * turning from zero, so the mark carries on from wherever it stopped instead
+ * of snapping back.
  */
 function advance(mark, degrees) {
   const now = parseFloat(mark.style.getPropertyValue('--mark-turn')) || 0;
@@ -36,53 +56,28 @@ function advance(mark, degrees) {
 }
 
 /**
- * One notch, fired when the chiron turns. The mark does not rotate passively —
- * it moves only when something else on screen moves, which lets the browser
- * source idle in between. --mark-step x 10 chiron turns is a full revolution,
- * i.e. the same 90s cadence the old continuous spin had.
+ * One notch and one blink, fired when the chiron turns. The mark does nothing
+ * passively — it moves only when something else on screen moves, which lets the
+ * browser source idle in between. --mark-step x 10 chiron turns is a full
+ * revolution, i.e. the same 90s cadence the old continuous spin had.
+ *
+ * The two run on separate classes so their durations stay independent; coupling
+ * them to one class would make the shorter animation cut the longer one short.
  */
 export function turnLogo(mark) {
   if (!mark) return;
   const step = parseFloat(getComputedStyle(mark).getPropertyValue('--mark-step')) || 36;
   advance(mark, step);
-  mark.classList.remove('turn');
-  void mark.offsetWidth;            // force reflow so the animation restarts
-  mark.classList.add('turn');
-  mark.addEventListener('animationend', onTurnDone);
-  mark.addEventListener('animationcancel', onTurnDone);
-}
-
-function onTurnDone(e) {
-  if (e.animationName !== 'mark-turn') return;
-  const mark = e.currentTarget;
-  mark.removeEventListener('animationend', onTurnDone);
-  mark.removeEventListener('animationcancel', onTurnDone);
-  mark.classList.remove('turn');
+  play(mark, 'turn');
+  play(mark, 'blink');
 }
 
 /**
- * One 180 degree turn to mark a state boundary. Occludes nothing.
- * Cleanup rides the animation's own 'animationend' rather than a timer, so it
- * can never desync from --xition-sweep (tokens.css) however that is tuned.
- * Also listens for 'animationcancel': removing the class to restart the
- * sweep (above) interrupts any still-running animation, which fires cancel
- * instead of end — without this the stale listener would never remove
- * itself.
+ * One 180 degree turn to mark a state boundary. Occludes nothing, and runs from
+ * the mark's current resting angle rather than snapping to zero first.
  */
 export function sweepLogo(mark) {
   if (!mark) return;
   advance(mark, 180);
-  mark.classList.remove('sweep');
-  void mark.offsetWidth;            // force reflow so the animation restarts
-  mark.classList.add('sweep');
-  mark.addEventListener('animationend', onSweepDone);
-  mark.addEventListener('animationcancel', onSweepDone);
-}
-
-function onSweepDone(e) {
-  if (e.animationName !== 'mark-sweep') return;
-  const mark = e.currentTarget;
-  mark.removeEventListener('animationend', onSweepDone);
-  mark.removeEventListener('animationcancel', onSweepDone);
-  mark.classList.remove('sweep');
+  play(mark, 'sweep');
 }

@@ -75,14 +75,14 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .mark .outer, .mark .eye { transform-origin: 50% 50%; }
 .mark .outer { transform: rotate(var(--mark-turn, 0deg)); }
 .mark.turn .outer { animation: mark-turn var(--mark-turn-dur) cubic-bezier(.3,.02,.2,1); }
-.mark .eye { animation: mark-blink var(--mark-blink) ease-in-out infinite; }
+.mark.blink .eye { animation: mark-blink var(--mark-blink-dur) ease-in-out; }
 @keyframes mark-turn {
   from { transform: rotate(calc(var(--mark-turn, 0deg) - var(--mark-step))); }
   to   { transform: rotate(var(--mark-turn, 0deg)); }
 }
 @keyframes mark-blink {
-  0%, 94%, 100% { transform: scaleY(1); }
-  96.5% { transform: scaleY(.06); }
+  from, to { transform: scaleY(1); }
+  42%      { transform: scaleY(.06); }   /* where the lid closed in the old loop */
 }
 /* one deliberate half-turn, for a state change */
 .mark.sweep .outer { animation: mark-sweep var(--xition-sweep) cubic-bezier(.3,.02,.2,1); }
