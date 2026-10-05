@@ -66,6 +66,25 @@ let currentRow = null;
 
 export function mountChiron(refs) { els = refs; }
 
+/**
+ * Never render a hole: whatever a turn's groups() returns — short, empty, or
+ * thrown — this is the one place that normalizes to exactly four rendered
+ * groups, padding the shortfall with the same dash empty state the Session
+ * turn already uses for unwired fields.
+ */
+function fourGroups(turn, state) {
+  let groups;
+  try {
+    groups = turn.groups(state);
+  } catch (err) {
+    console.warn(`[chiron] ${turn.spine} groups() threw`, err);
+    groups = [];
+  }
+  const four = groups.slice(0, 4);
+  while (four.length < 4) four.push(['-', '-', '']);
+  return four;
+}
+
 export function renderTurn(state, turnIndex) {
   if (!els) return;
   const turn = TURNS[turnIndex % TURNS.length];
@@ -89,9 +108,7 @@ export function renderTurn(state, turnIndex) {
 
   const row = document.createElement('div');
   row.className = 'grouprow';
-  let groups;
-  try { groups = turn.groups(state); } catch { groups = []; }
-  groups.slice(0, 4).forEach(([label, value, sub], i) => {
+  fourGroups(turn, state).forEach(([label, value, sub], i) => {
     const g = document.createElement('div');
     g.className = 'group' + (i === 0 ? ' lead' : '');
     g.style.animationDelay = `${120 + i * 70}ms`;

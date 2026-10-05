@@ -1,25 +1,29 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 /**
  * The overlay renders Steam persona names, which are attacker-controlled.
  * Only logo.js may use innerHTML, and only to inject the three SVG layers we
  * vendor ourselves into overlay/logo/ — never anything from the API.
+ *
+ * Enumerated, not hardcoded: a fixed file list silently stops covering new
+ * renderers (e.g. a future overlay/machine.js) the moment they're added.
  */
-const API_FACING = ['overlay/chiron.js', 'overlay/board.js', 'overlay/app.js'];
+const API_FACING = readdirSync('overlay').filter(f => f.endsWith('.js') && f !== 'logo.js');
 
-for (const file of API_FACING) {
+for (const name of API_FACING) {
+  const file = `overlay/${name}`;
   test(`${file} has no innerHTML sink`, () => {
     const src = readFileSync(file, 'utf8');
     assert.doesNotMatch(src, /\binnerHTML\b/,
       `${file} renders API-sourced strings; use textContent, not innerHTML`);
   });
 
-  test(`${file} does not use insertAdjacentHTML or document.write either`, () => {
+  test(`${file} does not use insertAdjacentHTML, document.write, eval, or Function construction`, () => {
     const src = readFileSync(file, 'utf8');
-    assert.doesNotMatch(src, /insertAdjacentHTML|document\.write|outerHTML\s*=/,
-      `${file} must not parse strings as HTML`);
+    assert.doesNotMatch(src, /insertAdjacentHTML|document\.write|outerHTML\s*=|\beval\(|new\s+Function\(/,
+      `${file} must not parse strings as HTML or code`);
   });
 }
 
