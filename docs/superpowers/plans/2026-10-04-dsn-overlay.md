@@ -1752,7 +1752,7 @@ const ROOT = 'overlay';
  */
 export function resolveStatic(pathname) {
   const rel = pathname === '/' ? '/index.html' : pathname;
-  return join(ROOT, normalize(rel).replace(/^(\.\.[/\])+/, ''));
+  return join(ROOT, normalize(rel).replace(/^(\.\.[/\\])+/, ''));
 }
 ```
 
