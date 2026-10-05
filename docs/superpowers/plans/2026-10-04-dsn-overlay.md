@@ -1661,6 +1661,14 @@ let current = emptyState('starting');
 /** Fetch and reduce. Raw histories are discarded immediately — 12 x 2.5MB
  *  must never all be held at once. */
 async function refresh() {
+  // An unconfigured ACCOUNT_ID is 0, and /v1/matches/active IGNORES a falsy
+  // account_id filter — it returns the whole 150-match watch list. Polling
+  // unguarded would pick a stranger's match, fetch twelve strangers' histories
+  // (18.5 MB), and render a complete, plausible broadcast of someone else's
+  // game that changes every poll. Wrong data that looks right is the worst
+  // failure mode on a broadcast, so refuse to run rather than guess.
+  if (!ACCOUNT_ID) { current = emptyState('DSN_ACCOUNT_ID is not set'); return; }
+
   try {
     const match = await activeMatchFor(ACCOUNT_ID);
     if (!match) { current = emptyState('no active match'); return; }
@@ -1742,7 +1750,15 @@ server.listen(PORT, () => {
   console.log(`  overlay   http://localhost:${PORT}/`);
   console.log(`  state     http://localhost:${PORT}/state`);
   console.log(`  fixture   http://localhost:${PORT}/fixture   (no game needed)`);
-  if (!ACCOUNT_ID) console.warn('  DSN_ACCOUNT_ID is unset — /state will stay IDLE');
+  if (!ACCOUNT_ID) {
+    console.warn('');
+    console.warn('  !! DSN_ACCOUNT_ID is not set. /state will stay IDLE and no');
+    console.warn('     live match will be detected. Use /fixture to develop the');
+    console.warn('     overlay without a game running.');
+    console.warn('     Set it to your SteamID3 numeric part, e.g.');
+    console.warn('       DSN_ACCOUNT_ID=123456789 npm run serve');
+    console.warn('');
+  }
 });
 
 refresh();
@@ -1805,6 +1821,17 @@ test('every traversal attempt stays inside overlay/', () => {
     const abs = resolve(resolveStatic(attack));
     assert.ok(abs.startsWith(ROOT),
       `${attack} escaped the overlay root -> ${abs}`);
+  }
+});
+
+test('an unset account id must never be sent to the active-match filter', async () => {
+  // /v1/matches/active ignores a falsy account_id and returns the whole
+  // 150-match watch list, so an unguarded poll would render a stranger's game.
+  const { activeMatchFor } = await import('../proxy/deadlock.js');
+  for (const bad of [0, null, undefined, NaN, '']) {
+    const result = await activeMatchFor(bad);
+    assert.equal(result, null,
+      `activeMatchFor(${JSON.stringify(bad)}) must short-circuit to null without calling the API`);
   }
 });
 
