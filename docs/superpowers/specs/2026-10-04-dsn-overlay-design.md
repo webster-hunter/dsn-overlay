@@ -255,24 +255,33 @@ returning ~56px of vertical game pixels.
 
 | Region | Size |
 |---|---|
-| Rail | 21% = 403px wide |
+| Top bar | 45px tall, full width |
+| Rail | 320px wide |
 | Chiron | 12.5% = 135px tall |
 | Logo bay | 11% of chiron width = 211px |
-| Gameplay | ~1517 × 945px |
-| Facecam | 403 × 227px (16:9) |
+| Gameplay | 1600 × 900px — **exactly 16:9** |
+| Facecam | 320 × 180px (16:9) |
+
+**Revised after first use.** The original budget gave the gameplay 1517 × 945,
+which is 1.605 — not 16:9. A 16:9 game capture fitted to it left 92px of dead
+space. The layout is now solved from the gameplay outwards: 1920 − 320 = 1600
+wide, 1080 − 45 − 135 = 900 tall, which is 16:9 with no rounding, and the
+facecam is 16:9 at the new rail width too. The rail lost 83px, so Steam names
+truncate sooner; that was accepted deliberately in exchange for the game
+filling its area.
 
 **Rail vertical budget** — this arithmetic is load-bearing and an earlier draft got it wrong by
 underestimating the header and bands at 62px:
 
 | Item | px |
 |---|---|
-| Rail height (1080 − 135 chiron) | 945 |
-| Facecam 16:9 | − 227 |
+| Rail height (1080 − 45 top bar − 135 chiron) | 900 |
+| Facecam 16:9 | − 180 |
 | Board header (padding + eyebrow + header flaps + border) | − 54 |
 | Two faction bands | − 44 |
-| **Available for rows** | **620** |
+| **Available for rows** | **622** |
 | 12 rows × 48px | − 576 |
-| **Slack** | **+44** |
+| **Slack** | **+46** |
 
 **The facecam is 16:9 because of this budget.** At 4:3 (302px) only 545px remains, and 12 rows at
 48px need 576 — a 31px overflow. 16:9 is also what modern webcams actually output; 4:3 was an

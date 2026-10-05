@@ -11,6 +11,16 @@ loadEnv(new URL('../.env', import.meta.url));
 export const ACCOUNT_ID = Number(process.env.DSN_ACCOUNT_ID ?? 0);
 
 /**
+ * What the top bar shows. Set in .env so there is one place a user edits.
+ * Both are optional — the bar keeps its height either way, because that height
+ * is what makes the gameplay area 16:9.
+ */
+export const STREAMER = Object.fromEntries(Object.entries({
+  name: process.env.DSN_STREAMER_NAME ?? '',
+  tagline: process.env.DSN_STREAMER_TAGLINE ?? ''
+}).filter(([, v]) => v.trim() !== ''));
+
+/**
  * PENDING DAY-ONE VERIFICATION — spec section 4.2.
  *
  * Valve's CSS names its tokens team1_color / team2_color (1-indexed) while the

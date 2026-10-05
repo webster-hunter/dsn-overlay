@@ -15,6 +15,15 @@ mountBoard(el('board'), el('stat-name'));
 mountChiron({ spine: el('spine'), groups: el('groups'), persistent: el('persistent') });
 mountMachine({ veil: el('veil'), ident: el('ident') });
 
+// Assigned as text, never parsed as markup. These come from .env rather than
+// the API, but the rule holds everywhere regardless of source — and the
+// injection gate greps this file, so even naming the banned sink in a comment
+// would fail the build.
+function renderStreamer(doc) {
+  el('streamer-name').textContent = doc?.streamer?.name ?? '';
+  el('streamer-tagline').textContent = doc?.streamer?.tagline ?? '';
+}
+
 let state = null;
 let mode = 0, turn = 0;
 
@@ -60,6 +69,7 @@ async function doPoll() {
   if (kind) {
     const swap = () => {
       state = next;
+      renderStreamer(state);
       renderBoard(state, el('board'));
       showMode(mode);
       renderTurn(state, turn);
@@ -69,6 +79,7 @@ async function doPoll() {
     await runTransition(kind, mark);
   } else if (!state) {
     state = next;
+    renderStreamer(state);
     renderBoard(state, el('board'));
     showMode(mode);
     renderTurn(state, turn);

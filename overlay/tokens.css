@@ -188,7 +188,12 @@
   --yamato-color: #625789;
 
   /* --- layout, from spec section 4.1 --- */
-  --rail-width: 403px;
+  /* Layout is solved for a 16:9 gameplay area, since the game capture is 16:9
+     and any mismatch shows as dead space. 1920-320 = 1600 wide, 1080-45-135 =
+     900 tall: exactly 16:9 with no rounding. The rail's own facecam is 16:9 at
+     this width too. */
+  --rail-width: 320px;
+  --topbar-height: 45px;
   --chiron-height: 135px;
   --logo-bay-width: 211px;
   --row-height: 48px;

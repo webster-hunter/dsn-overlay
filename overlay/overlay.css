@@ -12,6 +12,26 @@ html, body { width: 1920px; height: 1080px; overflow: hidden; background: transp
 body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); }
 
 #stage { position: relative; width: 1920px; height: 1080px; display: flex; flex-direction: column; }
+/* Full width, above both the gameplay and the rail. Its height is what makes
+   the gameplay area land on 16:9 — see the note in tokens.css. */
+#topbar {
+  height: var(--topbar-height); flex: none; display: flex; align-items: center;
+  gap: 14px; padding: 0 18px; overflow: hidden;
+  background: linear-gradient(180deg, #211E18, #14130F);
+  border-bottom: 2px solid var(--team-amber);
+}
+#streamer-name {
+  font-family: "Reaver", "Radiance", sans-serif; font-weight: 700;
+  font-size: 17px; letter-spacing: .04em; color: var(--base-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
+  max-width: 55%;
+}
+#streamer-tagline {
+  font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: #A3814A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0;
+}
+
 #upper { flex: 1; display: flex; min-height: 0; }
 
 /* transparent: the game shows through here */
@@ -118,10 +138,6 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 .prow.me { background: linear-gradient(90deg, color-mix(in srgb, var(--team-amber) 20%, transparent) 0%, rgba(255,237,121,.05) 55%, transparent 100%); }
 .prow.me::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--color-gold); }
 .prow.me .name { color: var(--color-gold); font-weight: 700; }
-.youtag {
-  flex: none; font-size: 7px; font-weight: 800; letter-spacing: .13em;
-  padding: 1px 3px; border-radius: 1px; color: #201500; background: var(--color-gold);
-}
 
 /* --- flap --- */
 .flap {

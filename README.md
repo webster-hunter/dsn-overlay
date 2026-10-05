@@ -5,24 +5,31 @@ built as an OBS browser source. It reads the public Deadlock APIs and puts a
 split-flap stat board and a news-ticker chiron around your gameplay.
 
 ```
-┌────────────────────────────────────────────────┬──────────────┐
-│                                                │   facecam    │
-│                                                ├──────────────┤
-│                 gameplay                       │  MATCH INFO  │
-│              (transparent)                     │    FORM      │
-│                                                ├──────────────┤
-│                                                │ HIDDEN KING  │
-│                                                │  ▸ 12 player │
-│                                                │    rows with │
-│                                                │  ARCHMOTHER  │
-│                                                │    11 flaps  │
-├──────┬─────────────────────────────────────────┴──────────────┤
-│ logo │  DEADLOCK · Session   TODAY   K/D   MATCHES   RANK     │
-└──────┴────────────────────────────────────────────────────────┘
-  1920 × 1080 — rail 403px, chiron 135px
+┌──────────────────────────────────────────────────────────────┐
+│ YOUR NAME   twitch.tv/you · live weeknights          45px    │
+├───────────────────────────────────────────┬──────────────────┤
+│                                           │     facecam      │
+│                                           ├──────────────────┤
+│                                           │   MATCH INFO     │
+│            gameplay 1600 × 900            │       FORM       │
+│            (transparent, 16:9)            ├──────────────────┤
+│                                           │  HIDDEN KING     │
+│                                           │   ▸ 12 rows,     │
+│                                           │  ARCHMOTHER      │
+│                                           │     11 flaps     │
+├──────┬────────────────────────────────────┴──────────────────┤
+│ logo │  DEADLOCK · Session  TODAY  K/D  MATCHES  RANK        │
+└──────┴──────────────────────────────────────────────────────-┘
+  1920 × 1080 — top bar 45px, rail 320px, chiron 135px
 ```
 
-**Four regions.** Gameplay shows through a fully transparent area. The right
+**The gameplay area is exactly 16:9.** 1920 − 320 = 1600 wide, 1080 − 45 − 135
+= 900 tall. That is deliberate: a 16:9 game capture fills it with no dead
+space. The rail is narrow enough that long Steam names truncate — a conscious
+trade for the game filling its area.
+
+**Five regions.** A thin bar across the top carries your name and tagline.
+Gameplay shows through a fully transparent area. The right
 rail carries an optional facecam above a Solari split-flap board listing all
 12 players, cycling through four stats every 9 seconds. The chiron along the
 bottom rolls through five themed turns. A layered Deadlock mark sits in the
@@ -66,6 +73,10 @@ cp .env.example .env
 ```ini
 # .env
 DSN_ACCOUNT_ID=123456789
+
+# optional — shown in the bar across the top
+DSN_STREAMER_NAME=Your Name
+DSN_STREAMER_TAGLINE=twitch.tv/you · live weeknights
 ```
 
 `DSN_ACCOUNT_ID` is the numeric part of your SteamID3, written `[U:1:` **N** `]`
@@ -228,6 +239,8 @@ Environment:
 | Variable | Default | |
 |---|---|---|
 | `DSN_ACCOUNT_ID` | `0` | your SteamID3 numeric part; required for live data. Set in `.env` (see `.env.example`) or the environment, which takes precedence. |
+| `DSN_STREAMER_NAME` | empty | shown in the top bar |
+| `DSN_STREAMER_TAGLINE` | empty | smaller line beside it — socials, schedule, anything |
 | `PORT` | `7331` | |
 
 Tunables live in `proxy/config.js` — poll interval, cache TTLs, history

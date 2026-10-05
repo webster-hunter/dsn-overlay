@@ -1,5 +1,5 @@
 import { rankLabel, tierColor } from './rank.js';
-import { FACTIONS, TEAM0_IS_AMBER } from './config.js';
+import { FACTIONS, TEAM0_IS_AMBER, STREAMER } from './config.js';
 import { rankStats } from './registry.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
@@ -61,7 +61,7 @@ export function emptyState(reason = '') {
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
       { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: [] }
     ],
-    session: {}, salient: [], generatedAt: Date.now()
+    session: {}, salient: [], streamer: STREAMER, generatedAt: Date.now()
   };
 }
 
@@ -94,6 +94,7 @@ export function buildState({
       { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: bucket.sapphire }
     ],
     session,
+    streamer: STREAMER,
     generatedAt: now,
     salient: []
   };

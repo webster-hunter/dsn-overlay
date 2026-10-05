@@ -10,7 +10,9 @@ export const MODES = [
 
 const CELLS = 11;
 const HEAD = 8;
-const NAME_COL = 169;   // 403 - 18 padding - 24 avatar - 16 gaps - 176 cells
+const NAME_COL = 86;    // 318 rail inner - 67 chrome - 165 cells (11 x 15).
+                        // Tight by design: the rail was cut back to give the
+                        // gameplay a true 16:9, and long Steam names truncate.
 
 let measure = null;
 let headRow = null;
@@ -54,14 +56,10 @@ function rowEl(player) {
   names.append(name, sub);
 
   const flapRow = makeFlapRow(CELLS);
-  row.append(avatar, names);
-  if (player.isSelf) {
-    const tag = document.createElement('span');
-    tag.className = 'youtag';
-    tag.textContent = 'YOU';
-    row.appendChild(tag);
-  }
-  row.appendChild(flapRow);
+  // No "YOU" tag: the row is already marked three ways (gold left border, amber
+  // wash, gold name) and at this rail width the tag halved the name column on
+  // the one row that matters most.
+  row.append(avatar, names, flapRow);
   rows.push({ player, flapRow });
   return row;
 }
