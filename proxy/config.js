@@ -76,3 +76,18 @@ export const HISTORY_CONCURRENCY = 3;   // 12 x 2.5MB; do not fetch in parallel
  * comfortably inside the limit.
  */
 export const SELF_RECHECK_MS = 15 * 60_000;
+
+/**
+ * Deadlock's own console log, the only way to know the operator is in a match.
+ *
+ * deadlock-api's single live source is /v1/matches/active, which its own
+ * documentation describes as the in-game watch tab, "limited to the top 200
+ * matches" — so an ordinary account's match is never in it, and no endpoint
+ * maps a player to their current match. The game knows, and the proxy runs on
+ * the same machine, so the log is the route.
+ *
+ * Requires `-condebug` in Deadlock's Steam launch options; without it the game
+ * writes no log and this path simply will not exist, which is handled.
+ */
+export const DEADLOCK_LOG = process.env.DSN_DEADLOCK_LOG
+  ?? 'C:/Program Files (x86)/Steam/steamapps/common/Deadlock/game/citadel/console.log';

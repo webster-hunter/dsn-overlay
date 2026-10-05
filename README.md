@@ -290,6 +290,42 @@ Two things improve this, both external to this repo:
 - **Priority fetching requires sponsoring the API** on Patreon:
   <https://www.patreon.com/manuelhexe/membership?vanity=manuelhexe>
 
+### Live match detection
+
+The overlay cannot see your live match through the API. deadlock-api's only
+live source is `/v1/matches/active`, which its own documentation describes as
+the in-game watch tab, **"limited to the top 200 matches"** — an ordinary
+account's game is never in it, and no endpoint maps a player to their current
+match. Sponsoring the API does not change this: priority fetching accelerates
+**finished**-match ingestion, not live detection.
+
+Every serious Deadlock tracker solves this locally, and so does this one. The
+game writes its own log when launched with `-condebug`:
+
+> Steam → right-click **Deadlock** → Properties → **Launch Options** → `-condebug`
+
+It then writes `game/citadel/console.log`, which carries match phase and match
+id. `DSN_DEADLOCK_LOG` overrides the path if your Steam library is elsewhere.
+
+`npm run logprobe` watches that file and reports the lines that look like match
+state, so the parser can be written against what the log actually prints rather
+than a guess at its format. It reads a local file and prints; nothing is sent
+anywhere.
+
+### Getting your own matches ingested
+
+Recent matches can be missing entirely (see *Upstream data freshness*). The
+fix is to submit your own match salts, which makes the API fetch the match from
+Valve immediately instead of waiting for organic discovery.
+
+Use the API authors' own tool for this — [`deadlock-api-ingest`](https://github.com/deadlock-api/deadlock-api-ingest).
+Run it alongside the proxy and this overlay benefits automatically, because
+every endpoint it already calls starts returning your matches.
+
+This project deliberately does **not** implement salt recovery itself: it
+requires decrypting your saved Steam session and talking to the Steam Game
+Coordinator as you, which is far outside what a broadcast overlay should do.
+
 ### Why the polling cadence is what it is
 
 deadlock-api's limits for bot-friended accounts on match history are **10 req/h**
