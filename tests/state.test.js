@@ -138,3 +138,29 @@ test('with no operatorId, nobody is flagged — and nothing is reordered', () =>
   assert.equal(s.teams[0].players.length, 6);
   assert.equal(s.teams[1].players.length, 6);
 });
+
+test('a player with no rank reads UNRANKED, not the lowest tier', () => {
+  // The API returns a row for everyone and fills it with rank 0 / subrank 0 /
+  // last_match null when there is no rank yet. Tier 0 is a real name
+  // ("Obscurus"), so taking the row at face value tells a broadcast its
+  // streamer is the lowest rank in the game when they are merely unranked.
+  const doc = buildState({
+    match: { match_id: 1, players: [{ account_id: 7, hero_id: 1, team: 0 }] },
+    steam: [{ account_id: 7, personaname: 'nobody' }],
+    ranks: [{ account_id: 7, badge: 0, rank: 0, subrank: 0, last_match: null }],
+    derived: new Map(), operatorId: 7
+  });
+  const row = doc.teams.flatMap(t => t.players)[0];
+  assert.equal(row.rank, 'UNRANKED');
+  assert.notEqual(row.rank, 'OBSCURUS');
+});
+
+test('a real rank is still rendered as its tier', () => {
+  const doc = buildState({
+    match: { match_id: 1, players: [{ account_id: 7, hero_id: 1, team: 0 }] },
+    steam: [{ account_id: 7, personaname: 'somebody' }],
+    ranks: [{ account_id: 7, badge: 115, rank: 11, subrank: 5 }],
+    derived: new Map(), operatorId: 7
+  });
+  assert.equal(doc.teams.flatMap(t => t.players)[0].rank, 'ETERNUS 5');
+});

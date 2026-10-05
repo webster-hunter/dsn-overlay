@@ -3,19 +3,22 @@ import { readFileSync, statSync } from 'node:fs';
 import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
-import { buildState, emptyState, fallbackState } from './state.js';
+import { buildState, emptyState, fallbackState, operatorRow } from './state.js';
 import { derivePlayer } from './derive.js';
 import { makeCache } from './cache.js';
 import {
   activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
 } from './deadlock.js';
-import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS } from './config.js';
+import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS } from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
 
 /** Served no-store so an edited overlay is never masked by a cached copy. */
 const CODE_EXT = new Set(['.html', '.js', '.css']);
 const matchCache = makeCache(MATCH_TTL_MS);
+// The operator's own history is one ~2.5MB call. Cached on the context TTL so
+// idling between matches costs one fetch an hour, not one per 15s poll.
+const selfCache = makeCache(CONTEXT_TTL_MS);
 
 // Resolved against this module, not the process cwd, so `npm run serve`
 // works the same regardless of the directory it is launched from.
@@ -50,6 +53,32 @@ async function refresh() {
   }
 }
 
+/**
+ * Idle does not mean empty. Four of the chiron's five turns are about the
+ * operator rather than the match, so between games we still build their row —
+ * record, form, abandons, K/D — and leave `teams` empty, because the board and
+ * the Matchup turn genuinely need opponents.
+ *
+ * A failure here must not escalate: the overlay showing dashes is the normal
+ * idle look, so a bad fetch falls back to the plain idle document.
+ */
+async function idleState() {
+  const key = String(ACCOUNT_ID);
+  if (!selfCache.stale(key)) return emptyState('no active match', selfCache.get(key));
+  try {
+    const [steam, ranks] = await Promise.all([
+      batchSteam([ACCOUNT_ID]), batchRank([ACCOUNT_ID])
+    ]);
+    const derived = new Map([[ACCOUNT_ID, derivePlayer(await matchHistory(ACCOUNT_ID))]]);
+    const row = operatorRow({ accountId: ACCOUNT_ID, steam, ranks, derived });
+    selfCache.set(key, row);
+    return emptyState('no active match', row);
+  } catch (err) {
+    console.warn('[idle] could not build the operator row:', err.message);
+    return emptyState('no active match');
+  }
+}
+
 export async function doRefresh() {
   // An unconfigured ACCOUNT_ID is 0, and /v1/matches/active IGNORES a falsy
   // account_id filter — it returns the whole 150-match watch list. Polling
@@ -61,7 +90,7 @@ export async function doRefresh() {
 
   try {
     const match = await activeMatchFor(ACCOUNT_ID);
-    if (!match) { current = emptyState('no active match'); return; }
+    if (!match) { current = await idleState(); return; }
 
     const key = String(match.match_id);
     if (!matchCache.stale(key)) { current = matchCache.get(key); return; }

@@ -32,6 +32,7 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
   // next is fetched. EMPTY_DERIVED keeps a missing entry renderable.
   const d = derived.get(p.account_id) ?? EMPTY_DERIVED;
   const kd = d.averages.kd;
+  const ranked = (rk?.rank ?? 0) > 0;
   return {
     accountId: p.account_id,
     // A private profile or an omitted batch row must not blank the board.
@@ -41,8 +42,15 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
     form: d.form,
     season: d.season.text,
     abandons: String(d.abandons),
-    rank: rk ? rankLabel(rk.rank, rk.subrank) : 'UNRANKED',
-    rankColor: rk ? tierColor(rk.rank) : tierColor(-1),
+    // A rank row exists for everyone, but the API fills it with
+    // rank 0 / subrank 0 / last_match null when there is no rank yet. Tier 0 is
+    // a real name ("Obscurus"), so rendering the row as-is labels an UNRANKED
+    // player as the lowest rank in the game. Real ranks carry subranks 1-6, so
+    // rank 0 means no data. Understating a true tier-0 player is a far smaller
+    // error than telling a broadcast its streamer is Obscurus when they are
+    // simply unranked.
+    rank: ranked ? rankLabel(rk.rank, rk.subrank) : 'UNRANKED',
+    rankColor: ranked ? tierColor(rk.rank) : tierColor(-1),
     kd: Number.isFinite(kd) ? kd.toFixed(1) : '∞',
     streak: d.streak.kind ? `${d.streak.kind}${d.streak.n}` : '0',
     netWorth: k(d.averages.netWorth),
@@ -52,9 +60,31 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
   };
 }
 
-export function emptyState(reason = '') {
+/**
+ * The streamer's own row, built from their history alone — no match required.
+ *
+ * Four of the chiron's five turns are about the operator, not the match, so
+ * without this they sit on dashes whenever no game is running: in queue,
+ * between matches, and while setting up a scene. The data is reachable the
+ * whole time; nothing was asking for it.
+ *
+ * Reuses playerRow so the row is produced by the same tested path as every
+ * other row. `hero_id` is null because there is no match to have picked one.
+ */
+export function operatorRow({ accountId, steam = [], ranks = [], derived = new Map() }) {
+  if (!(accountId > 0)) return null;
+  return playerRow(
+    { account_id: accountId, hero_id: null },
+    indexBy(steam, 'account_id'),
+    indexBy(ranks, 'account_id'),
+    derived,
+    accountId
+  );
+}
+
+export function emptyState(reason = '', operator = null) {
   return {
-    phase: 'IDLE', matchId: null, reason,
+    phase: 'IDLE', matchId: null, reason, operator,
     factions: FACTIONS,
     teams: [
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
@@ -97,6 +127,9 @@ export function buildState({
     generatedAt: now,
     salient: []
   };
+  // One place to find the streamer, match or no match: during a match this is
+  // the same object already pinned first in their faction.
+  doc.operator = [...bucket.amber, ...bucket.sapphire].find(p => p.isSelf) ?? null;
   doc.salient = rankStats(doc);
   return doc;
 }
