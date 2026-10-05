@@ -60,3 +60,19 @@ export const POLL_MS = 15_000;          // match detection
 export const MATCH_TTL_MS = 90 * 60_000;
 export const CONTEXT_TTL_MS = 60 * 60_000;
 export const HISTORY_CONCURRENCY = 3;   // 12 x 2.5MB; do not fetch in parallel
+
+/**
+ * Safety net for the operator's own history while idle.
+ *
+ * The normal triggers are the CONTEXT_TTL_MS baseline and a drop the moment a
+ * match ends. The latter needs the proxy to actually WITNESS the match, and the
+ * active-match feed is not guaranteed to report one — upstream gaps are real
+ * and observed. Without a net, a missed match leaves stats stale for the full
+ * hour.
+ *
+ * 15 minutes is at most 4 fetches an hour. deadlock-api allows bot-friended
+ * accounts 10 req/h on plain match-history (and only 1 req/h with
+ * force_refetch, which is why this project never sets it), so this stays
+ * comfortably inside the limit.
+ */
+export const SELF_RECHECK_MS = 15 * 60_000;

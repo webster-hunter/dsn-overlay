@@ -9,7 +9,7 @@ import { makeCache } from './cache.js';
 import {
   activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
 } from './deadlock.js';
-import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS } from './config.js';
+import { ACCOUNT_ID, POLL_MS, MATCH_TTL_MS, CONTEXT_TTL_MS, SELF_RECHECK_MS } from './config.js';
 
 const PORT = Number(process.env.PORT ?? 7331);
 
@@ -19,6 +19,12 @@ const matchCache = makeCache(MATCH_TTL_MS);
 // The operator's own history is one ~2.5MB call. Cached on the context TTL so
 // idling between matches costs one fetch an hour, not one per 15s poll.
 const selfCache = makeCache(CONTEXT_TTL_MS);
+// Whether a match has been observed since the operator's history was last
+// fetched. Tracked separately from `current.phase`, which other paths
+// legitimately overwrite — fallbackState on an outage, emptyState on a cold
+// start — and so cannot be relied on to remember that a match happened.
+let sawMatch = false;
+let lastSelfFetch = 0;
 
 // Resolved against this module, not the process cwd, so `npm run serve`
 // works the same regardless of the directory it is launched from.
@@ -81,6 +87,7 @@ async function idleState() {
       session: sessionToday(history, startOfToday(), mode === 'brawl' ? isBrawl : isCountable)
     };
     selfCache.set(key, built);
+    lastSelfFetch = Date.now();
     return emptyState('no active match', built);
   } catch (err) {
     console.warn('[idle] could not build the operator row:', err.message);
@@ -107,16 +114,22 @@ export async function doRefresh() {
   try {
     const match = await activeMatchFor(ACCOUNT_ID);
     if (!match) {
-      // The hourly TTL is right for idling, but a match ending is exactly when
-      // today's record, form and streak change — and exactly when someone is
-      // looking at the overlay. Drop the cache so the next build refetches.
-      if (current?.phase === 'MATCH') {
+      // A match ending is exactly when today's record, form and streak change,
+      // and exactly when someone is looking at the overlay.
+      if (sawMatch) {
+        sawMatch = false;
         selfCache.drop(String(ACCOUNT_ID));
         console.log('[refresh] match ended — refreshing the operator history');
+      } else if (lastSelfFetch && Date.now() - lastSelfFetch > SELF_RECHECK_MS) {
+        // Net for a match the active-match feed never reported: without this a
+        // missed match stays invisible for the whole CONTEXT_TTL_MS hour.
+        selfCache.drop(String(ACCOUNT_ID));
+        console.log('[refresh] periodic re-check of the operator history');
       }
       current = await idleState();
       return;
     }
+    sawMatch = true;
 
     const key = String(match.match_id);
     if (!matchCache.stale(key)) { current = matchCache.get(key); return; }

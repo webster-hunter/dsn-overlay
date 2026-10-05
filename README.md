@@ -263,6 +263,51 @@ tokens rather than duplicated as literals.
 
 ---
 
+## Upstream data freshness
+
+Recent matches can take a while to appear, and that is upstream of this project
+rather than something the proxy can fix.
+
+`/v1/players/{id}/match-history` says so itself:
+
+> If the account is friends with one of our bots, the match history is a
+> combination of the data from **Steam** and **ClickHouse**, so you always get
+> the most up-to-date data and full history. If the account is not friends with
+> a bot, only the stored match history from **ClickHouse** is returned.
+
+So an account that is **not** friended to a deadlock-api bot only ever sees
+their stored copy, which lags. Observed in practice: two matches played that
+morning were absent from the history hours later, `force_refetch=true` changed
+nothing, and `/v1/matches/{id}/metadata` returned
+`503 Failed to fetch data from Steam` for both.
+
+Two things improve this, both external to this repo:
+
+- **Friend one of the deadlock-api bots on Steam.** The plain endpoint this
+  project already calls then returns combined Steam + ClickHouse data — no code
+  change needed here. Ask in their Discord, linked as the API's own contact:
+  <https://discord.gg/XMF9Xrgfqu>
+- **Priority fetching requires sponsoring the API** on Patreon:
+  <https://www.patreon.com/manuelhexe/membership?vanity=manuelhexe>
+
+### Why the polling cadence is what it is
+
+deadlock-api's limits for bot-friended accounts on match history are **10 req/h**
+plain, but only **1 req/h with `force_refetch=true`**. This project therefore
+never sets `force_refetch`, and fetches the operator's own history at most:
+
+| trigger | |
+|---|---|
+| idle baseline | once per `CONTEXT_TTL_MS` (60 min) |
+| a match ending | immediately — the numbers just changed |
+| idle safety net | every `SELF_RECHECK_MS` (15 min) at most |
+
+Worst case is 4 fetches an hour, inside the 10/h allowance. The safety net
+exists because the match-ending trigger needs the proxy to actually observe the
+match, and the active-match feed is not guaranteed to report one.
+
+---
+
 ## Known limitations
 
 - **`TEAM0_IS_AMBER` is an unverified assumption.** `proxy/config.js` maps team
@@ -275,6 +320,8 @@ tokens rather than duplicated as literals.
   serving the last good document indefinitely rather than blanking the board.
   Nothing on screen marks the data as stale; `stale` and `reason` are present
   on the document but unrendered.
+- **Recent matches may lag.** See *Upstream data freshness* above — an account
+  not friended to a deadlock-api bot only gets their stored history copy.
 - **No coverage of `overlay/chiron.js`.** Its rendering is exercised manually
   and by the injection gate, not by unit tests.
 
