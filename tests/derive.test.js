@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   isCountable, isScored, isWin, isAbandon, form, seasonRecord,
-  abandonCount, streak, averages, derivePlayer
-} from '../proxy/derive.js';
+  abandonCount, streak, averages, derivePlayer, sessionToday } from '../proxy/derive.js';
 
 const REAL = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
 
@@ -185,4 +184,32 @@ test('derivePlayer on the real fixture is internally consistent', () => {
   assert.ok(d.season.text.length <= 11, 'season must fit the cell budget');
   assert.ok(d.abandons >= 0);
   assert.ok(d.averages.netWorth > 0);
+});
+
+test('sessionToday counts only matches started since the boundary', () => {
+  const mk = (hoursAgo, kills, deaths, result, delta) => ({
+    start_time: Math.floor((Date.now() - hoursAgo * 3600e3) / 1000),
+    game_mode: 1, match_mode: 1, player_kills: kills, player_deaths: deaths,
+    match_result: result, player_team: 0, ranked_delta: delta,
+    player_match_outcome: 0
+  });
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  // two today (one win, one loss), one well before the boundary
+  const out = sessionToday([mk(1, 10, 5, 0, 12), mk(2, 4, 8, 1, -6), mk(40, 9, 1, 0, 30)],
+                           midnight.getTime());
+  assert.equal(out.todayRecord, '1-1');
+  assert.equal(out.winRateToday, '50%');
+  assert.equal(out.matches, '2');          // the 40h-old match must not count
+  assert.equal(out.kd, '1.1');             // (10+4)/(5+8)
+  assert.equal(out.rankProgress, '+6');    // 12 + -6, and signed
+});
+
+test('a day with no matches yields {} so the turn shows dashes, not zeroes', () => {
+  // Zeroes would assert "you went 0-0 today"; absent data must read as absent.
+  const old = { start_time: Math.floor((Date.now() - 40 * 3600e3) / 1000),
+                game_mode: 1, match_mode: 1, player_team: 0, match_result: 0 };
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  assert.deepEqual(sessionToday([old], midnight.getTime()), {});
+  assert.deepEqual(sessionToday([], midnight.getTime()), {});
+  assert.deepEqual(sessionToday(null, midnight.getTime()), {});
 });

@@ -82,7 +82,7 @@ export function operatorRow({ accountId, steam = [], ranks = [], derived = new M
   );
 }
 
-export function emptyState(reason = '', operator = null) {
+export function emptyState(reason = '', { operator = null, session = {} } = {}) {
   return {
     phase: 'IDLE', matchId: null, reason, operator,
     factions: FACTIONS,
@@ -90,7 +90,7 @@ export function emptyState(reason = '', operator = null) {
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
       { faction: FACTIONS.sapphire, colorVar: '--team-sapphire', players: [] }
     ],
-    session: {}, salient: [], streamer: STREAMER, generatedAt: Date.now()
+    session, salient: [], streamer: STREAMER, generatedAt: Date.now()
   };
 }
 

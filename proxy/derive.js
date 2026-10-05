@@ -129,6 +129,41 @@ export function averages(entries) {
 }
 
 /** Everything the board and the free stat tier need, from one history array. */
+/**
+ * Everything the chiron's Session turn needs, derived from the match history we
+ * already fetch.
+ *
+ * The /commands/resolve endpoint was built for this and is the obvious source,
+ * but it serves text/plain (not the JSON our client assumes) and returns an
+ * empty body for every query we tried, including a literal with no variable in
+ * it. History carries `start_time` per match, so "today" is ours to compute and
+ * needs no second upstream.
+ *
+ * `since` is the local midnight boundary, passed in so the caller owns the
+ * clock and tests are not at the mercy of the machine's timezone.
+ */
+export function sessionToday(entries, since) {
+  const todays = (entries ?? []).filter(isCountable)
+    .filter(e => typeof e?.start_time === 'number' && e.start_time * 1000 >= since);
+  if (!todays.length) return {};
+
+  const scored = todays.filter(isScored);
+  const wins = scored.filter(isWin).length;
+  const losses = scored.length - wins;
+  const kills = todays.reduce((a, e) => a + (e.player_kills ?? 0), 0);
+  const deaths = todays.reduce((a, e) => a + (e.player_deaths ?? 0), 0);
+  // ranked_delta is the per-match rank movement; summing the day gives progress.
+  const delta = todays.reduce((a, e) => a + (e.ranked_delta ?? 0), 0);
+
+  return {
+    todayRecord: `${wins}-${losses}`,
+    winRateToday: scored.length ? `${Math.round((wins / scored.length) * 100)}%` : '',
+    kd: deaths ? (kills / deaths).toFixed(1) : (kills ? '∞' : '0.0'),
+    matches: String(todays.length),
+    rankProgress: delta ? (delta > 0 ? `+${delta}` : String(delta)) : ''
+  };
+}
+
 export function derivePlayer(entries) {
   const scored = (entries ?? []).filter(isScored);
   return {

@@ -4,7 +4,7 @@ import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
 import { buildState, emptyState, fallbackState, operatorRow } from './state.js';
-import { derivePlayer } from './derive.js';
+import { derivePlayer, sessionToday } from './derive.js';
 import { makeCache } from './cache.js';
 import {
   activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
@@ -69,14 +69,25 @@ async function idleState() {
     const [steam, ranks] = await Promise.all([
       batchSteam([ACCOUNT_ID]), batchRank([ACCOUNT_ID])
     ]);
-    const derived = new Map([[ACCOUNT_ID, derivePlayer(await matchHistory(ACCOUNT_ID))]]);
-    const row = operatorRow({ accountId: ACCOUNT_ID, steam, ranks, derived });
-    selfCache.set(key, row);
-    return emptyState('no active match', row);
+    const history = await matchHistory(ACCOUNT_ID);
+    const derived = new Map([[ACCOUNT_ID, derivePlayer(history)]]);
+    const built = {
+      operator: operatorRow({ accountId: ACCOUNT_ID, steam, ranks, derived }),
+      session: sessionToday(history, startOfToday())
+    };
+    selfCache.set(key, built);
+    return emptyState('no active match', built);
   } catch (err) {
     console.warn('[idle] could not build the operator row:', err.message);
     return emptyState('no active match');
   }
+}
+
+/** Local midnight. The streamer's "today" is their day, not UTC's. */
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
 export async function doRefresh() {
@@ -90,7 +101,17 @@ export async function doRefresh() {
 
   try {
     const match = await activeMatchFor(ACCOUNT_ID);
-    if (!match) { current = await idleState(); return; }
+    if (!match) {
+      // The hourly TTL is right for idling, but a match ending is exactly when
+      // today's record, form and streak change — and exactly when someone is
+      // looking at the overlay. Drop the cache so the next build refetches.
+      if (current?.phase === 'MATCH') {
+        selfCache.drop(String(ACCOUNT_ID));
+        console.log('[refresh] match ended — refreshing the operator history');
+      }
+      current = await idleState();
+      return;
+    }
 
     const key = String(match.match_id);
     if (!matchCache.stale(key)) { current = matchCache.get(key); return; }
@@ -102,13 +123,18 @@ export async function doRefresh() {
     // object and released before the next is fetched. Peak memory is one
     // history, not twelve.
     const derived = new Map();
+    let session = {};
     await mapLimited(ids, async id => {
       const raw = await matchHistory(id);
       derived.set(id, derivePlayer(raw));
+      // The operator's history is already in hand here, so today's numbers cost
+      // nothing extra — no second fetch, and the raw payload is still released
+      // before the next one arrives.
+      if (id === ACCOUNT_ID) session = sessionToday(raw, startOfToday());
       return true;
     });
 
-    const state = buildState({ match, steam, ranks, derived, operatorId: ACCOUNT_ID });
+    const state = buildState({ match, steam, ranks, derived, operatorId: ACCOUNT_ID, session });
     matchCache.set(key, state);
     current = state;
   } catch (err) {
