@@ -54,7 +54,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 142 tests, no install step needed
+npm test          # 139 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -217,7 +217,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-142 tests across 19 files, run by `node --test`. The quoted glob in the script
+139 tests across 19 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:
@@ -364,6 +364,27 @@ This project deliberately does **not** implement salt recovery itself: it
 requires decrypting your saved Steam session and talking to the Steam Game
 Coordinator as you, which is far outside what a broadcast overlay should do.
 
+### Data freshness on screen
+
+The chiron's **Session** turn prints how long ago the newest match the API can
+see actually started, in the `Matches` qualifier — `19h ago`, `12m ago`,
+`just now`.
+
+That one line answers the question this section raises. Finish a game, and if
+it still reads `3h ago` a minute later, the match has not reached the API yet
+and every history-derived number on the board is from before it — which is
+exactly how you tell whether `deadlock-api-ingest` is doing its job.
+
+It is carried even on a day with no matches, because that is when it matters
+most: an empty Session turn otherwise cannot distinguish "I have not played"
+from "the API has not caught up".
+
+The document carries a timestamp and the overlay recomputes the age on every
+render, rather than the proxy formatting a string once. That is what makes a
+frozen document visibly age instead of sitting there looking live. A missing
+timestamp and a machine whose clock runs ahead both render as nothing, never
+as `NaN ago` or `-4m ago`.
+
 ### Why the polling cadence is what it is
 
 deadlock-api's limits for bot-friended accounts on match history are **10 req/h**
@@ -390,10 +411,13 @@ match, and the active-match feed is not guaranteed to report one.
 - **The Session chiron turn renders dashes.** Session-tier stats need
   `/v1/commands/resolve`, which is implemented and tested but not yet wired.
   The other four turns are fully populated.
-- **Stale data is unbounded.** If the proxy loses the API mid-match it keeps
-  serving the last good document indefinitely rather than blanking the board.
-  Nothing on screen marks the data as stale; `stale` and `reason` are present
-  on the document but unrendered.
+- **A lost feed is not captioned.** If the proxy loses the API mid-match it
+  keeps serving the last good document rather than blanking the board, and
+  nothing says which feed dropped — `stale` and `reason` are on the document
+  for the logs, deliberately unrendered, because a real broadcast does not
+  caption its own plumbing. The *age* of the data is shown instead, which
+  covers the case that matters: a board the proxy has stopped updating keeps
+  ageing on screen. See *Data freshness on screen* below.
 - **Recent matches may lag.** See *Upstream data freshness* above — an account
   not friended to a deadlock-api bot only gets their stored history copy.
 - **No coverage of `overlay/chiron.js`.** Its rendering is exercised manually
