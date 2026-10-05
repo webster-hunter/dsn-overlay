@@ -182,7 +182,10 @@ body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); 
 
 /* --- chiron --- */
 #spine {
-  flex: none; width: 104px; padding: 0 12px; display: flex; flex-direction: column;
+  /* 132px matches the logo bay, and its 104px content box clears the widest
+     turn names ("Standing", "Matchup" at 90px) with room to spare. At the
+     old 104px the larger type overflowed them by 11px. */
+  flex: none; width: 132px; padding: 0 14px; display: flex; flex-direction: column;
   justify-content: center; gap: 2px;
   border-right: 1px solid #453D2E; background: rgba(0,0,0,.16);
 }
