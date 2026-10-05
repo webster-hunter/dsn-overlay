@@ -20,7 +20,6 @@ function indexBy(rows, key) {
 }
 
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
-const secs = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
 function playerRow(p, steamById, rankById, derived, operatorId) {
   const prof = steamById.get(p.account_id);
@@ -71,10 +70,11 @@ export function buildState({
   const rankById = indexBy(ranks, 'account_id');
 
   const amberIdx = TEAM0_IS_AMBER ? 0 : 1;
+  const stats = derived ?? new Map();
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, derived ?? new Map(), operatorId));
+    bucket[side].push(playerRow(p, steamById, rankById, stats, operatorId));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {

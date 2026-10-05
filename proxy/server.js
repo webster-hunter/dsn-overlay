@@ -23,7 +23,26 @@ let current = emptyState('starting');
 
 /** Fetch and reduce. Raw histories are discarded immediately — 12 x 2.5MB
  *  must never all be held at once. */
+/**
+ * Guards against overlapping refreshes. setInterval does not await, so if one
+ * run exceeds POLL_MS (15s) a second would start before the cache is written —
+ * two concurrent 17-call, 18.5MB assemblies writing the same key. Measured
+ * assembly is 2.4s, but the slowest single history was 1,448ms, so a slow API
+ * or a network stall can cross 15s.
+ */
+let refreshing = false;
+
 async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    await doRefresh();
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function doRefresh() {
   // An unconfigured ACCOUNT_ID is 0, and /v1/matches/active IGNORES a falsy
   // account_id filter — it returns the whole 150-match watch list. Polling
   // unguarded would pick a stranger's match, fetch twelve strangers' histories

@@ -71,6 +71,29 @@ test('a player absent from steam and rank keeps the board at 12 rows', () => {
   assert.equal(row.form.length, 11, 'FORM still fills the board');
 });
 
+test('a player whose history fetch failed entirely still renders', () => {
+  // mapLimited maps a failed per-item fetch to null, so that account never
+  // reaches the derived map at all — a different case from "fetched, but
+  // empty". EMPTY_DERIVED exists for exactly this, and nothing exercised it.
+  const victim = match.players[7].account_id;
+  const partial = new Map(fullDerived);
+  partial.delete(victim);
+
+  const s = buildState({ match, steam, ranks, derived: partial, session: {}, now: 1 });
+  const all = s.teams.flatMap(t => t.players);
+  assert.equal(all.length, 12, 'the row must survive a missing derived entry');
+
+  const row = all.find(p => p.accountId === victim);
+  assert.equal(row.form.length, 11, 'FORM still fills the board');
+  assert.equal(row.season, '0-0');
+  assert.equal(row.abandons, '0');
+  assert.equal(row.matches, '0');
+  assert.equal(row.streak, '0');
+  assert.ok(row.name.length > 0, 'the name comes from steam, not from history');
+  assert.doesNotMatch(JSON.stringify(row), /NaN|undefined|null/,
+    'the catastrophic path must not leak NaN into the document');
+});
+
 test('a player with no history at all still renders', () => {
   const thin = new Map(match.players.map(p => [p.account_id, derivePlayer([])]));
   const s = buildState({ match, steam, ranks, derived: thin, session: {}, now: 1 });
