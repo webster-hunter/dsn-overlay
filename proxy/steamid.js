@@ -5,10 +5,10 @@
  * than make the operator work out which they are holding, accept all four and
  * convert.
  *
- *   account id    900000008              what the API wants; Steam calls this
+ *   account id    123456788              what the API wants; Steam calls this
  *                                         your "Friend Code"
  *   SteamID64     76561198083722516       profile URLs, most API docs
- *   SteamID3      [U:1:900000008]        steamid.io, some tools
+ *   SteamID3      [U:1:123456788]        steamid.io, some tools
  *   SteamID       STEAM_0:0:61728394     the legacy form, still shown in-game
  */
 
@@ -34,7 +34,7 @@ export function toAccountId(raw) {
   const text = String(raw ?? '').trim();
   if (!text) return 0;
 
-  // [U:1:900000008]  — also bare U:1:900000008
+  // [U:1:123456788]  — also bare U:1:123456788
   const id3 = text.match(/^\[?U:1:(\d+)\]?$/i);
   if (id3) return inRange(BigInt(id3[1]));
 

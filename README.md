@@ -82,9 +82,9 @@ different ones on different pages, so paste whichever you have:
 
 | What you might have | Example |
 |---|---|
-| Friend Code (in your Steam profile) | `900000008` |
+| Friend Code (in your Steam profile) | `123456788` |
 | SteamID64 (the number in a profile URL) | `76561198083722516` |
-| SteamID3 (steamid.io calls it this) | `[U:1:900000008]` |
+| SteamID3 (steamid.io calls it this) | `[U:1:123456788]` |
 | Legacy SteamID | `STEAM_0:0:61728394` |
 
 They all refer to the same account and all convert to the one the Deadlock API

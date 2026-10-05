@@ -9,7 +9,7 @@ test('parses the shape a real .env has', () => {
   const parsed = parseEnv([
     '# a comment',
     '',
-    'DSN_ACCOUNT_ID=900000008',
+    'DSN_ACCOUNT_ID=123456788',
     '   PORT = 7331   ',
     'QUOTED="quoted value"',
     "SINGLE='single'",
@@ -17,7 +17,7 @@ test('parses the shape a real .env has', () => {
   ].join('\n'));
 
   assert.deepEqual(parsed, {
-    DSN_ACCOUNT_ID: '900000008',
+    DSN_ACCOUNT_ID: '123456788',
     PORT: '7331',
     QUOTED: 'quoted value',
     SINGLE: 'single'

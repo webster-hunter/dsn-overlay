@@ -355,9 +355,9 @@ if (isMain) {
         // Distinct from "not set": they did set one, it just wasn't readable.
         console.warn(`  !! DSN_ACCOUNT_ID is set to ${JSON.stringify(given)}, which is not a`);
         console.warn('     Steam identifier this understands. Accepted forms:');
-        console.warn('       900000008            Friend Code / account id');
+        console.warn('       123456788            Friend Code / account id');
         console.warn('       76561198083722516     SteamID64, from a profile URL');
-        console.warn('       [U:1:900000008]      SteamID3');
+        console.warn('       [U:1:123456788]      SteamID3');
         console.warn('       STEAM_0:0:61728394   legacy SteamID');
       } else {
         console.warn('  !! DSN_ACCOUNT_ID is not set. Copy .env.example to .env and');

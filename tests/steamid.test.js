@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { toAccountId, STEAM64_BASE } from '../proxy/steamid.js';
 
 // One real account, as Steam renders it in four different places.
-const ACCOUNT_ID = 900000008;
+const ACCOUNT_ID = 123456788;
 const STEAM64 = '76561198083722516';
 
 test('all four Steam forms resolve to the same account id', () => {
   assert.equal(toAccountId(ACCOUNT_ID), ACCOUNT_ID);           // friend code
   assert.equal(toAccountId(STEAM64), ACCOUNT_ID);              // profile URL
-  assert.equal(toAccountId('[U:1:900000008]'), ACCOUNT_ID);   // steamid.io
+  assert.equal(toAccountId('[U:1:123456788]'), ACCOUNT_ID);   // steamid.io
   assert.equal(toAccountId('STEAM_0:0:61728394'), ACCOUNT_ID); // legacy
 });
 
@@ -23,8 +23,8 @@ test('an odd legacy id keeps its low bit', () => {
 });
 
 test('surrounding whitespace and a bare U:1: form are tolerated', () => {
-  assert.equal(toAccountId('  900000008  '), ACCOUNT_ID);
-  assert.equal(toAccountId('U:1:900000008'), ACCOUNT_ID);
+  assert.equal(toAccountId('  123456788  '), ACCOUNT_ID);
+  assert.equal(toAccountId('U:1:123456788'), ACCOUNT_ID);
 });
 
 test('unusable input resolves to 0, so the proxy stays idle', () => {
