@@ -2,7 +2,7 @@
 
 An ESPN-styled broadcast overlay for streaming [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/),
 built as an OBS browser source. It reads the public Deadlock APIs and puts a
-split-flap stat board and a news-ticker chiron around your gameplay.
+news-ticker chiron and read-only Twitch chat around your gameplay.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -252,10 +252,6 @@ because the chiron names opponents. The live endpoint also returns `realname`,
 `countrycode`, avatar URLs and a `friends` array of ~1,000 third parties who
 were never in your match — none of which this project commits.
 
-Hero icons are vendored by hero id, so the board resolves `heroes/<id>.webp`
-with no manifest. A hero with no vendored icon falls back to a styled plate
-rather than leaving a gap.
-
 ---
 
 ## How it works
@@ -407,11 +403,9 @@ match, and the active-match feed is not guaranteed to report one.
 
 ## Design notes
 
-The spec and the implementation plan live in `docs/superpowers/`. Two decisions
-there are load-bearing and easy to undo by accident:
+The spec and the implementation plan live in `docs/superpowers/`. One decision
+there is load-bearing and easy to undo by accident:
 
-- **Flap cells are a constant 11 wide**, right-justified, truncating from the
-  left. Stats never change the board's width.
 - **The cell font stack is `"RadianceM", "Radiance", ui-monospace, monospace`
   and every entry matters.** `RadianceM` is a digits-only subset with exact
   tabular advances — that is what makes the columns line up — and it has *no
