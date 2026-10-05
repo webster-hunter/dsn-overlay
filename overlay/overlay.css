@@ -1,0 +1,85 @@
+@font-face { font-family: "Radiance"; font-weight: 600;
+  src: url("fonts/radiance-semibold.otf") format("opentype"); font-display: block; }
+@font-face { font-family: "Radiance"; font-weight: 700;
+  src: url("fonts/radiance-bold.otf") format("opentype"); font-display: block; }
+@font-face { font-family: "RadianceM";
+  src: url("fonts/radiancem-semibold.otf") format("opentype"); font-display: block; }
+@font-face { font-family: "Reaver"; font-weight: 700;
+  src: url("fonts/reaver-bold.otf") format("opentype"); font-display: block; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+body { font-family: "Radiance", system-ui, sans-serif; color: var(--base-text); }
+
+#stage { position: relative; width: 1920px; height: 1080px; display: flex; flex-direction: column; }
+#upper { flex: 1; display: flex; min-height: 0; }
+
+/* transparent: the game shows through here */
+#gameplay { flex: 1; }
+
+#rail {
+  width: var(--rail-width); flex: none; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #211E18, #14130F);
+  border-left: 2px solid #3A3429;
+}
+#facecam {
+  width: 100%; aspect-ratio: 16 / 9; flex: none;
+  border-bottom: 2px solid var(--team-amber);
+  background: #0E0B06;            /* OBS places the camera source over this */
+}
+#board-head {
+  flex: none; padding: 8px 10px 7px;
+  background: linear-gradient(180deg, #3A2D14, #241A08);
+  border-bottom: 2px solid var(--team-amber);
+}
+#board-head .eyebrow {
+  font-size: 8px; letter-spacing: .22em; text-transform: uppercase;
+  color: #A3814A; font-weight: 800; margin-bottom: 6px; text-align: right;
+}
+/* the stat name is the column header for right-justified values, so it
+   shares their right edge — spec section 5.1 */
+.flaprow { display: flex; gap: 2px; justify-content: flex-end; }
+#board { flex: 1; min-height: 0; }
+
+#chiron {
+  height: var(--chiron-height); flex: none; display: flex;
+  background: linear-gradient(180deg, #2E2C27, #1A1916);
+  border-top: 3px solid var(--team-amber);
+}
+#logo-bay {
+  width: var(--logo-bay-width); flex: none; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border-right: 2px solid var(--team-amber);
+  background:
+    radial-gradient(130% 150% at 12% -10%, rgba(255,239,215,.17) 0%, rgba(255,239,215,.05) 34%, transparent 62%),
+    linear-gradient(142deg, #1C1710 0%, #100C06 54%, #090703 100%);
+}
+#logo-bay::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 130% at 50% 50%, transparent 42%, rgba(0,0,0,.55) 100%);
+}
+#chiron-body { flex: 1; display: flex; min-width: 0; }
+
+/* transition surfaces, inert until machine.js drives them */
+#veil, #ident {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+}
+#veil { background: #070502; z-index: 10; }
+#ident { z-index: 11; display: flex; align-items: center; justify-content: center; }
+
+/* --- logo --- */
+.mark { position: relative; width: 106px; aspect-ratio: 1; color: var(--mark-color); z-index: 2; }
+.mark .layer { position: absolute; inset: 0; }
+.mark .layer svg { width: 100%; height: 100%; display: block; }
+.mark .layer path { fill: currentColor; }
+.mark .outer, .mark .eye { transform-origin: 50% 50%; }
+.mark .outer { animation: mark-spin var(--mark-rev) linear infinite; }
+.mark .eye { animation: mark-blink var(--mark-blink) ease-in-out infinite; }
+@keyframes mark-spin { to { transform: rotate(360deg); } }
+@keyframes mark-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96.5% { transform: scaleY(.06); }
+}
+/* one deliberate half-turn, for a state change */
+.mark.sweep .outer { animation: mark-sweep var(--xition-sweep) cubic-bezier(.3,.02,.2,1); }
+@keyframes mark-sweep { from { transform: rotate(0); } to { transform: rotate(180deg); } }
