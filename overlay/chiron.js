@@ -96,7 +96,10 @@ export function renderTurn(state, turnIndex) {
   const turn = TURNS[turnIndex % TURNS.length];
 
   els.spine.replaceChildren(
-    div('spine-sub', turn.sub),
+    // The same number means different things in Normal and Street Brawl, so
+    // the mode is named rather than left to be inferred. Unlabelled stats that
+    // silently change meaning are worse than not showing brawl at all.
+    div('spine-sub', state?.mode === 'brawl' ? 'Brawl' : turn.sub),
     div('spine-title', turn.spine)
   );
 

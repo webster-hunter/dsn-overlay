@@ -16,20 +16,38 @@
  * is the safe direction: a mystery mode cannot inflate a win rate, and bot
  * games would.
  */
-const NORMAL_GAME_MODE = 1;
+export const GAME_MODES = { normal: 1, brawl: 4 };
 const COMPETITIVE_MATCH_MODES = new Set([1, 4]);
 
-export function isCountable(entry) {
-  return entry?.game_mode === NORMAL_GAME_MODE
+/** Competitive play in one specific game mode. */
+export function isMode(entry, gameMode) {
+  return entry?.game_mode === gameMode
       && COMPETITIVE_MATCH_MODES.has(entry?.match_mode);
 }
 
-/** An entry only counts toward W/L if both sides of the comparison exist. */
-export function isScored(entry) {
-  return isCountable(entry)
-      && Number.isInteger(entry?.player_team)
-      && Number.isInteger(entry?.match_result);
+/** Normal 6v6. Unchanged meaning — everything downstream still defaults to it. */
+export function isCountable(entry) {
+  return isMode(entry, GAME_MODES.normal);
 }
+
+/**
+ * Street Brawl. A separate game with its own scoring, so its matches are
+ * tracked apart rather than folded into the season record: confirmed by
+ * observation, brawl entries carry brawl_score and brawl_avg_round_time_s
+ * (69 and 73 of 74 non-zero) where normal entries carry neither (0 of 166).
+ */
+export function isBrawl(entry) {
+  return isMode(entry, GAME_MODES.brawl);
+}
+
+/** An entry only counts toward W/L if both sides of the comparison exist. */
+/** Builds an is-scored test for one mode. */
+export const scoredBy = countable => entry =>
+  countable(entry)
+  && Number.isInteger(entry?.player_team)
+  && Number.isInteger(entry?.match_result);
+
+export const isScored = scoredBy(isCountable);
 
 /**
  * Win iff the player's team is the winning team.
@@ -43,8 +61,11 @@ export function isScored(entry) {
  * everywhere. Cross-tabs over both a 4,348-entry and a 63-entry sample agree:
  * where the two are equal the outcome is never 2, where they differ never 1.
  */
+/** The comparison itself, for callers that have already screened the entry. */
+const won = entry => entry.player_team === entry.match_result;
+
 export function isWin(entry) {
-  return isScored(entry) && entry.player_team === entry.match_result;
+  return isScored(entry) && won(entry);
 }
 
 /**
@@ -63,19 +84,19 @@ function recent(entries) {
   return (entries ?? []).slice().sort(byNewest);
 }
 
-export function seasonRecord(entries) {
+export function seasonRecord(entries, scored = isScored) {
   let wins = 0, losses = 0;
   for (const en of entries ?? []) {
-    if (!isScored(en)) continue;
-    if (isWin(en)) wins++; else losses++;
+    if (!scored(en)) continue;
+    if (won(en)) wins++; else losses++;
   }
   return { wins, losses, text: `${wins}-${losses}` };
 }
 
 /** All-time count over countable play. See the base-rate note in the preamble. */
-export function abandonCount(entries) {
+export function abandonCount(entries, countable = isCountable) {
   let n = 0;
-  for (const en of entries ?? []) if (isCountable(en) && isAbandon(en)) n++;
+  for (const en of entries ?? []) if (countable(en) && isAbandon(en)) n++;
   return n;
 }
 
@@ -85,22 +106,22 @@ export function abandonCount(entries) {
  * characters — the board's cell count is fixed and must not be fed a short
  * string.
  */
-export function form(entries, n = 11) {
+export function form(entries, n = 11, scored = isScored) {
   const chars = recent(entries)
-    .filter(isScored)
+    .filter(scored)
     .slice(0, n)
-    .map(en => (isWin(en) ? 'W' : 'L'));
+    .map(en => (won(en) ? 'W' : 'L'));
   return chars.join('').padEnd(n, ' ');
 }
 
 /** Current run of identical results, newest-first. */
-export function streak(entries) {
-  const scored = recent(entries).filter(isScored);
+export function streak(entries, isScoredFn = isScored) {
+  const scored = recent(entries).filter(isScoredFn);
   if (!scored.length) return { kind: null, n: 0 };
-  const kind = isWin(scored[0]) ? 'W' : 'L';
+  const kind = won(scored[0]) ? 'W' : 'L';
   let n = 0;
   for (const en of scored) {
-    if ((isWin(en) ? 'W' : 'L') !== kind) break;
+    if ((won(en) ? 'W' : 'L') !== kind) break;
     n++;
   }
   return { kind, n };
@@ -109,22 +130,22 @@ export function streak(entries) {
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 // Countable-only: a Street Brawl round lasts minutes and has its own net-worth
 // scale, so including one would skew every average on the board.
-const nums = (entries, field) =>
-  (entries ?? []).filter(isCountable).map(en => en?.[field]).filter(v => typeof v === 'number');
+const nums = (entries, field, countable = isCountable) =>
+  (entries ?? []).filter(countable).map(en => en?.[field]).filter(v => typeof v === 'number');
 
-export function averages(entries) {
-  const kills = nums(entries, 'player_kills');
-  const deaths = nums(entries, 'player_deaths');
+export function averages(entries, countable = isCountable) {
+  const kills = nums(entries, 'player_kills', countable);
+  const deaths = nums(entries, 'player_deaths', countable);
   const totalDeaths = deaths.reduce((a, b) => a + b, 0);
   return {
     // guard the zero-death case: a player who has never died is 'inf', not NaN
     kd: totalDeaths === 0
       ? (kills.length ? Infinity : 0)
       : kills.reduce((a, b) => a + b, 0) / totalDeaths,
-    netWorth: mean(nums(entries, 'net_worth')),
-    lastHits: mean(nums(entries, 'last_hits')),
-    denies: mean(nums(entries, 'denies')),
-    matchLen: mean(nums(entries, 'match_duration_s'))
+    netWorth: mean(nums(entries, 'net_worth', countable)),
+    lastHits: mean(nums(entries, 'last_hits', countable)),
+    denies: mean(nums(entries, 'denies', countable)),
+    matchLen: mean(nums(entries, 'match_duration_s', countable))
   };
 }
 
@@ -142,13 +163,13 @@ export function averages(entries) {
  * `since` is the local midnight boundary, passed in so the caller owns the
  * clock and tests are not at the mercy of the machine's timezone.
  */
-export function sessionToday(entries, since) {
-  const todays = (entries ?? []).filter(isCountable)
+export function sessionToday(entries, since, countable = isCountable) {
+  const todays = (entries ?? []).filter(countable)
     .filter(e => typeof e?.start_time === 'number' && e.start_time * 1000 >= since);
   if (!todays.length) return {};
 
-  const scored = todays.filter(isScored);
-  const wins = scored.filter(isWin).length;
+  const scored = todays.filter(scoredBy(countable));
+  const wins = scored.filter(won).length;
   const losses = scored.length - wins;
   const kills = todays.reduce((a, e) => a + (e.player_kills ?? 0), 0);
   const deaths = todays.reduce((a, e) => a + (e.player_deaths ?? 0), 0);
@@ -164,14 +185,44 @@ export function sessionToday(entries, since) {
   };
 }
 
-export function derivePlayer(entries) {
-  const scored = (entries ?? []).filter(isScored);
+/** One mode's block of statistics. */
+export function deriveMode(entries, countable) {
+  const scored = scoredBy(countable);
+  const pool = (entries ?? []).filter(countable);
   return {
-    form: form(entries, 11),
-    season: seasonRecord(entries),
-    abandons: abandonCount(entries),
-    streak: streak(entries),
-    averages: averages(entries),
-    matches: scored.length
+    form: form(pool, 11, scored),
+    season: seasonRecord(pool, scored),
+    abandons: abandonCount(pool, countable),
+    streak: streak(pool, scored),
+    averages: averages(pool, countable),
+    matches: pool.filter(scored).length
+  };
+}
+
+/**
+ * Which mode this player has most recently played, so the overlay can show the
+ * stats that match what they are actually doing rather than a stale headline
+ * from a mode they left weeks ago. Falls back to normal when there is nothing
+ * to go on.
+ */
+export function lastPlayedMode(entries) {
+  let best = null;
+  for (const en of entries ?? []) {
+    if (!isCountable(en) && !isBrawl(en)) continue;
+    if (!best || (en.start_time ?? 0) > (best.start_time ?? 0)) best = en;
+  }
+  return best && isBrawl(best) ? 'brawl' : 'normal';
+}
+
+/**
+ * Normal-mode stats stay at the top level so every existing consumer is
+ * untouched; brawl rides alongside. Both are always present, so the UI can
+ * switch between them without another fetch.
+ */
+export function derivePlayer(entries) {
+  return {
+    ...deriveMode(entries, isCountable),
+    brawl: deriveMode(entries, isBrawl),
+    lastMode: lastPlayedMode(entries)
   };
 }

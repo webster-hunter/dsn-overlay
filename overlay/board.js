@@ -51,7 +51,14 @@ function rowEl(player) {
 }
 
 /** Build the structure once per match, then only flap values. */
+/** Names the mode above the board, for the same reason the chiron spine does. */
+function markMode(state) {
+  const eyebrow = document.querySelector('#board-head .eyebrow');
+  if (eyebrow) eyebrow.textContent = state?.mode === 'brawl' ? 'Street Brawl' : 'Match info';
+}
+
 export function renderBoard(state, boardEl) {
+  markMode(state);
   boardEl.replaceChildren();
   rows.length = 0;
   for (const team of state.teams) {

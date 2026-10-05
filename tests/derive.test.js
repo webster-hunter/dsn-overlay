@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   isCountable, isScored, isWin, isAbandon, form, seasonRecord,
-  abandonCount, streak, averages, derivePlayer, sessionToday } from '../proxy/derive.js';
+  abandonCount, streak, averages, derivePlayer, sessionToday, lastPlayedMode } from '../proxy/derive.js';
 
 const REAL = JSON.parse(readFileSync('fixtures/match-history.sample.json', 'utf8'));
 
@@ -212,4 +212,29 @@ test('a day with no matches yields {} so the turn shows dashes, not zeroes', () 
   assert.deepEqual(sessionToday([old], midnight.getTime()), {});
   assert.deepEqual(sessionToday([], midnight.getTime()), {});
   assert.deepEqual(sessionToday(null, midnight.getTime()), {});
+});
+
+test('normal and brawl are derived separately from one history', () => {
+  const mk = (gameMode, result, t) => ({
+    game_mode: gameMode, match_mode: 1, player_team: 0, match_result: result,
+    start_time: t, player_kills: 4, player_deaths: 2, net_worth: 1000
+  });
+  // two normal wins, one brawl loss
+  const hist = [mk(1, 0, 300), mk(1, 0, 200), mk(4, 1, 100)];
+  const d = derivePlayer(hist);
+  assert.equal(d.season.text, '2-0', 'normal stays at the top level');
+  assert.equal(d.brawl.season.text, '0-1', 'brawl is tracked apart');
+  assert.equal(d.matches, 2);
+  assert.equal(d.brawl.matches, 1);
+});
+
+test('lastPlayedMode follows the most recent countable match, not the array order', () => {
+  const mk = (gameMode, t) => ({ game_mode: gameMode, match_mode: 1, start_time: t,
+                                 player_team: 0, match_result: 0 });
+  // deliberately out of order: the newest entry is the brawl one
+  assert.equal(lastPlayedMode([mk(1, 100), mk(4, 900), mk(1, 500)]), 'brawl');
+  assert.equal(lastPlayedMode([mk(4, 100), mk(1, 900)]), 'normal');
+  assert.equal(lastPlayedMode([]), 'normal', 'nothing to go on falls back to normal');
+  // an uncountable mode must not win the comparison
+  assert.equal(lastPlayedMode([mk(1, 100), { game_mode: 7, match_mode: 1, start_time: 999 }]), 'normal');
 });

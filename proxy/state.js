@@ -1,5 +1,6 @@
 import { rankLabel, tierColor } from './rank.js';
 import { FACTIONS, TEAM0_IS_AMBER, STREAMER } from './config.js';
+import { GAME_MODES } from './derive.js';
 import { rankStats } from './registry.js';
 
 const PLACEHOLDER_NAME = 'UNKNOWN';
@@ -25,12 +26,15 @@ function indexBy(rows, key) {
 
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
 
-function playerRow(p, steamById, rankById, derived, operatorId) {
+function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal') {
   const prof = steamById.get(p.account_id);
   const rk = rankById.get(p.account_id);
   // Pre-derived by the caller so each 2.5MB history is released before the
   // next is fetched. EMPTY_DERIVED keeps a missing entry renderable.
-  const d = derived.get(p.account_id) ?? EMPTY_DERIVED;
+  const all = derived.get(p.account_id) ?? EMPTY_DERIVED;
+  // Normal lives at the top level, brawl alongside it. Showing the mode the
+  // player is actually in beats a stale headline from one they have left.
+  const d = mode === 'brawl' ? (all.brawl ?? EMPTY_DERIVED) : all;
   const kd = d.averages.kd;
   const ranked = (rk?.rank ?? 0) > 0;
   return {
@@ -55,8 +59,9 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
     streak: d.streak.kind ? `${d.streak.kind}${d.streak.n}` : '0',
     netWorth: k(d.averages.netWorth),
     lastHits: String(Math.round(d.averages.lastHits)),
-    denies: String(Math.round(d.averages.denies)),
-    matches: String(d.matches)
+    denies: mode === 'brawl' ? '-' : String(Math.round(d.averages.denies)),
+    matches: String(d.matches),
+    mode
   };
 }
 
@@ -71,20 +76,25 @@ function playerRow(p, steamById, rankById, derived, operatorId) {
  * Reuses playerRow so the row is produced by the same tested path as every
  * other row. `hero_id` is null because there is no match to have picked one.
  */
-export function operatorRow({ accountId, steam = [], ranks = [], derived = new Map() }) {
+export function operatorRow({ accountId, steam = [], ranks = [], derived = new Map(), mode }) {
   if (!(accountId > 0)) return null;
+  // Idle, there is no match to take the mode from, so follow whatever they
+  // played last — otherwise someone three weeks into Street Brawl sees a
+  // September headline with nothing saying so.
+  const resolved = mode ?? derived.get(accountId)?.lastMode ?? 'normal';
   return playerRow(
     { account_id: accountId, hero_id: null },
     indexBy(steam, 'account_id'),
     indexBy(ranks, 'account_id'),
     derived,
-    accountId
+    accountId,
+    resolved
   );
 }
 
-export function emptyState(reason = '', { operator = null, session = {} } = {}) {
+export function emptyState(reason = '', { operator = null, session = {}, mode = 'normal' } = {}) {
   return {
-    phase: 'IDLE', matchId: null, reason, operator,
+    phase: 'IDLE', matchId: null, reason, operator, mode,
     factions: FACTIONS,
     teams: [
       { faction: FACTIONS.amber, colorVar: '--team-amber', players: [] },
@@ -102,12 +112,15 @@ export function buildState({
   const steamById = indexBy(steam, 'account_id');
   const rankById = indexBy(ranks, 'account_id');
 
+  // The board follows the match: in a brawl game every row shows brawl stats.
+  const mode = match.game_mode === GAME_MODES.brawl ? 'brawl' : 'normal';
+
   const amberIdx = TEAM0_IS_AMBER ? 0 : 1;
   const stats = derived ?? new Map();
   const bucket = { amber: [], sapphire: [] };
   for (const p of match.players) {
     const side = p.team === amberIdx ? 'amber' : 'sapphire';
-    bucket[side].push(playerRow(p, steamById, rankById, stats, operatorId));
+    bucket[side].push(playerRow(p, steamById, rankById, stats, operatorId, mode));
   }
   // The operator is pinned first within their own faction — spec section 5.1.
   for (const side of ['amber', 'sapphire']) {
@@ -116,6 +129,7 @@ export function buildState({
 
   const doc = {
     phase: 'MATCH',
+    mode,
     matchId: match.match_id ?? null,
     factions: FACTIONS,
     teams: [

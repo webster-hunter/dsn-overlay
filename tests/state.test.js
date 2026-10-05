@@ -164,3 +164,24 @@ test('a real rank is still rendered as its tier', () => {
   });
   assert.equal(doc.teams.flatMap(t => t.players)[0].rank, 'ETERNUS 5');
 });
+
+test('a brawl match shows brawl stats, and says so', () => {
+  const derived = new Map([[7, {
+    form: 'WWWWWWWWWWW', season: { text: '99-1' }, abandons: 2, streak: { kind: 'W', n: 9 },
+    averages: { kd: 5, netWorth: 1000, lastHits: 100, denies: 9 }, matches: 100,
+    brawl: { form: 'LLLLLLLLLLL', season: { text: '1-99' }, abandons: 0, streak: { kind: 'L', n: 9 },
+             averages: { kd: 0.5, netWorth: 500, lastHits: 20, denies: 0 }, matches: 7 }
+  }]]);
+  const base = { steam: [{ account_id: 7, personaname: 'p' }], ranks: [], derived, operatorId: 7 };
+
+  const normal = buildState({ ...base, match: { match_id: 1, game_mode: 1, players: [{ account_id: 7, hero_id: 1, team: 0 }] } });
+  const brawl  = buildState({ ...base, match: { match_id: 2, game_mode: 4, players: [{ account_id: 7, hero_id: 1, team: 0 }] } });
+
+  assert.equal(normal.mode, 'normal');
+  assert.equal(brawl.mode, 'brawl', 'the document names the mode so the UI can label it');
+  assert.equal(normal.teams.flatMap(t => t.players)[0].season, '99-1');
+  assert.equal(brawl.teams.flatMap(t => t.players)[0].season, '1-99', 'brawl must not show the normal record');
+  // brawl records no denies at all, so a 0 would read as "you denied nothing"
+  assert.equal(brawl.teams.flatMap(t => t.players)[0].denies, '-');
+  assert.equal(normal.teams.flatMap(t => t.players)[0].denies, '9');
+});

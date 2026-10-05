@@ -4,7 +4,7 @@ import { extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStatic } from './static.js';
 import { buildState, emptyState, fallbackState, operatorRow } from './state.js';
-import { derivePlayer, sessionToday } from './derive.js';
+import { derivePlayer, sessionToday, isBrawl, isCountable, GAME_MODES } from './derive.js';
 import { makeCache } from './cache.js';
 import {
   activeMatchFor, batchSteam, batchRank, matchHistory, mapLimited
@@ -71,9 +71,14 @@ async function idleState() {
     ]);
     const history = await matchHistory(ACCOUNT_ID);
     const derived = new Map([[ACCOUNT_ID, derivePlayer(history)]]);
+    // Everything in an idle document describes the same mode: whichever the
+    // operator played last. Mixing a normal headline with a brawl session
+    // would be worse than either on its own.
+    const mode = derived.get(ACCOUNT_ID)?.lastMode ?? 'normal';
     const built = {
-      operator: operatorRow({ accountId: ACCOUNT_ID, steam, ranks, derived }),
-      session: sessionToday(history, startOfToday())
+      mode,
+      operator: operatorRow({ accountId: ACCOUNT_ID, steam, ranks, derived, mode }),
+      session: sessionToday(history, startOfToday(), mode === 'brawl' ? isBrawl : isCountable)
     };
     selfCache.set(key, built);
     return emptyState('no active match', built);
@@ -130,7 +135,10 @@ export async function doRefresh() {
       // The operator's history is already in hand here, so today's numbers cost
       // nothing extra — no second fetch, and the raw payload is still released
       // before the next one arrives.
-      if (id === ACCOUNT_ID) session = sessionToday(raw, startOfToday());
+      if (id === ACCOUNT_ID) {
+        session = sessionToday(raw, startOfToday(),
+          match.game_mode === GAME_MODES.brawl ? isBrawl : isCountable);
+      }
       return true;
     });
 
