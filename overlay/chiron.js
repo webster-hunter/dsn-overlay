@@ -24,45 +24,56 @@ export function ageLabel(at, now = Date.now()) {
 }
 
 /** Five themed turns, spec section 6.2. Each picks 4 groups from the state. */
+/**
+ * Three turns, each stat appearing exactly once.
+ *
+ * There were five. Matchup needed a live roster the API cannot supply, and the
+ * four that remained repeated eight of their sixteen slots — K/D, Rank, Matches
+ * and Streak each twice — so a viewer watching two full cycles saw the same
+ * numbers come round again. Three turns is a 27s cycle instead of 45s, and
+ * every slot earns its place.
+ *
+ * Everything here is derived from the operator's own match history. Nothing
+ * reads the match, because nothing can.
+ */
 export const TURNS = [
-  { spine: 'Session', sub: 'Deadlock', groups: s => [
-    ['Today',      s.session.todayRecord ?? '-', s.session.winRateToday ?? ''],
-    ['K / D',      s.session.kd ?? '-',          ''],
-    ['Matches',    s.session.matches ?? '-',     ageLabel(s.session.lastMatchAt)],
-    // sessionToday never writes a rank — it derives from match history, which
-    // carries per-match movement but not standing. This read a key that does
-    // not exist, so the group showed a dash with a live '+6' underneath it,
-    // while #persistent displayed the real rank from the same document.
-    ['Rank',       self(s)?.rank ?? '-',          s.session.rankProgress ?? '']
+  { spine: 'Today', sub: 'Session', groups: s => [
+    ['Today',      s.session?.todayRecord ?? '-', s.session?.winRateToday ?? ''],
+    ['K / D',      s.session?.kd ?? '-',          'today'],
+    // The qualifier is the freshness signal: finish a game and if this still
+    // reads '3h ago' the match has not reached the API yet.
+    ['Matches',    s.session?.matches ?? '-',     ageLabel(s.session?.lastMatchAt)],
+    // Rank lives here, not with the averages, because it is not one — and
+    // rankProgress is already its natural qualifier. sessionToday writes no
+    // rank of its own, so this reads the operator row.
+    ['Rank',       self(s)?.rank ?? '-',          s.session?.rankProgress ?? '']
   ] },
-  { spine: 'Hero', sub: 'Form', groups: s => {
+  { spine: 'Hero', sub: 'Form', groups: (s, cycle = 0) => {
     const me = self(s);
+    // The hero being played right now wins. Otherwise step through the pool —
+    // last-played first, then most-played — one per rotation of the chiron.
+    const pool = Array.isArray(me?.heroPool) ? me.heroPool : [];
+    const pick = me?.heroId != null ? null : pool[cycle % (pool.length || 1)];
+    const heroId = me?.heroId ?? pick?.heroId ?? null;
     return [
       // An icon, not a number. `Hero 20` was the only place a raw database id
-      // reached the screen. The descriptor rather than a string because the
-      // value is an image here; renderTurn is what knows how to draw one.
-      ['Hero',     { heroId: me?.heroId ?? me?.lastHero ?? null }, `${me?.matches ?? 0} matches`],
-      ['Season',   me?.season ?? '-',           ''],
-      ['K / D',    me?.kd ?? '-',               ''],
-      ['Streak',   me?.streak ?? '-',           '']
+      // reached the screen. A descriptor rather than a string because the value
+      // is an image here; renderTurn is what knows how to draw one.
+      ['Hero',     { heroId }, heroSub(me, pick)],
+      ['Season',   me?.season ?? '-',                 'all modes'],
+      ['Streak',   me?.streak ?? '-',                 'current'],
+      ['Form',     (me?.form ?? '').trim() || '-',    'last 11']
     ];
   } },
-  { spine: 'Standing', sub: 'Rank', groups: s => {
+  { spine: 'Averages', sub: 'Career', groups: s => {
     const me = self(s);
     return [
-      ['Rank',     me?.rank ?? '-',       ''],
-      ['Net worth',me?.netWorth ?? '-',   'average'],
-      ['Last hits',me?.lastHits ?? '-',   'average'],
-      ['Denies',   me?.denies ?? '-',     'average']
-    ];
-  } },
-  { spine: 'Records', sub: 'Watch', groups: s => {
-    const me = self(s);
-    return [
-      ['Streak',   me?.streak ?? '-',     ''],
-      ['Abandons', me?.abandons ?? '0',   'all time'],
-      ['Matches',  me?.matches ?? '-',    'tracked'],
-      ['Form',     (me?.form ?? '').trim() || '-', 'last 11']
+      ['Net worth', me?.netWorth ?? '-',  'per match'],
+      ['Last hits', me?.lastHits ?? '-',  'per match'],
+      ['Denies',    me?.denies ?? '-',    'per match'],
+      // Shown for the first time here: it was computed on every document and
+      // never had a slot. Formatted as m:ss by the proxy.
+      ['Length',    me?.matchLen ?? '-',  'per match']
     ];
   } }
 ];
@@ -75,6 +86,18 @@ export const TURNS = [
 // between matches as well as during one — searching the roster only found them
 // while a game was running, which is exactly when the streamer is not looking.
 const self = s => s?.operator ?? null;
+
+/**
+ * What the hero icon's qualifier says: why this hero is the one on screen.
+ * Without it a rotating icon is unexplained — the viewer cannot tell a
+ * most-played hero from the one just played.
+ */
+function heroSub(me, pick) {
+  if (me?.heroId != null) return 'playing now';
+  if (!pick) return '';
+  if (pick.last) return 'last played';
+  return `${pick.matches} match${pick.matches === 1 ? '' : 'es'}`;
+}
 
 /**
  * The local path for a hero's icon, or null.
@@ -141,10 +164,10 @@ export function mountChiron(refs) { els = refs; }
  * groups, padding the shortfall with the same dash empty state the Session
  * turn already uses for unwired fields.
  */
-function fourGroups(turn, state) {
+function fourGroups(turn, state, cycle) {
   let groups;
   try {
-    groups = turn.groups(state);
+    groups = turn.groups(state, cycle);
   } catch (err) {
     console.warn(`[chiron] ${turn.spine} groups() threw`, err);
     groups = [];
@@ -157,6 +180,11 @@ function fourGroups(turn, state) {
 export function renderTurn(state, turnIndex) {
   if (!els) return;
   const turn = TURNS[turnIndex % TURNS.length];
+  // How many full rotations of the chiron have happened. A turn that has more
+  // to say than fits in one visit uses this to advance — the Hero turn steps
+  // through the hero pool, so it shows a different hero each time it comes
+  // round rather than holding one icon for the whole stream.
+  const cycle = Math.floor(turnIndex / TURNS.length);
 
   els.spine.replaceChildren(
     // The same number means different things in Normal and Street Brawl, so
@@ -191,7 +219,7 @@ export function renderTurn(state, turnIndex) {
 
   const row = document.createElement('div');
   row.className = 'grouprow';
-  fourGroups(turn, state).forEach(([label, value, sub], i) => {
+  fourGroups(turn, state, cycle).forEach(([label, value, sub], i) => {
     const g = document.createElement('div');
     g.className = 'group' + (i === 0 ? ' lead' : '');
     g.style.animationDelay = `${25 + i * 38}ms`;   // early, so the rise is seen

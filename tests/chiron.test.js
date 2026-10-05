@@ -19,15 +19,30 @@ const doc = () => ({
     rankProgress: '+6', lastMatchAt: Date.now() - 20 * 60_000
   },
   operator: {
-    accountId: 123456788, name: 'operator', isSelf: true, heroId: 15, lastHero: 15,
+    accountId: 123456788, name: 'operator', isSelf: true, heroId: null,
+    heroPool: [
+      { heroId: 15, matches: 40, last: true },
+      { heroId: 1, matches: 12, last: false },
+      { heroId: 20, matches: 1, last: false }
+    ],
     rank: 'ARCHON II', season: '43-31', kd: '1.9', streak: 'W3',
     netWorth: '50,000', lastHits: '150', denies: '10', abandons: '1',
-    matches: '74', form: 'WLLWLLLWWWW'
+    matches: '74', form: 'WLLWLLLWWWW', matchLen: '30:12'
   },
   teams: [{ players: [] }, { players: [
     { name: 'opponent one', season: '10-9', rank: 'ORACLE I' },
     { name: 'opponent two', season: '4-4', rank: 'ALCHEMIST III' }
   ] }]
+});
+
+test('the three turns repeat no stat between them', () => {
+  // Five turns became three because the four that survived the Matchup removal
+  // repeated eight of their sixteen slots. Every label must now be unique, or
+  // the cycle is showing the same number twice again.
+  const labels = TURNS.flatMap(t => t.groups(doc()).map(([label]) => label));
+  assert.equal(new Set(labels).size, labels.length,
+    `a stat appears in more than one turn: ${labels.join(', ')}`);
+  assert.equal(TURNS.length, 3);
 });
 
 test('every turn returns groups whose values are all populated', () => {
@@ -61,21 +76,49 @@ test('the hero icon url only accepts a small positive integer', () => {
   }
 });
 
-test('the Hero turn falls back to the last hero played when not in a match', () => {
+const heroTurn = () => TURNS.find(t => t.spine === 'Hero');
+const heroGroup = (state, cycle) =>
+  heroTurn().groups(state, cycle).find(([label]) => label === 'Hero');
+
+test('the Hero turn rotates through the pool, one hero per chiron cycle', () => {
   // heroId is only set during a match, and with no live roster that is almost
-  // never — without the fallback this group would sit on a dash permanently.
+  // never — so between games the turn steps through the pool instead of
+  // holding one icon for the whole stream.
   const state = doc();
-  state.operator.heroId = null;
-  state.operator.lastHero = 7;
-  const hero = TURNS.find(t => t.spine === 'Hero').groups(state)
-    .find(([label]) => label === 'Hero');
-  assert.equal(hero[1].heroId, 7);
+  const seen = [0, 1, 2].map(cycle => heroGroup(state, cycle)[1].heroId);
+  assert.deepEqual(seen, [15, 1, 20], 'last-played first, then most-played');
 });
 
-test('the Session turn shows the operator rank, not a session field', () => {
+test('the rotation wraps rather than running off the end of the pool', () => {
   const state = doc();
-  const session = TURNS.find(t => t.spine === 'Session');
-  const rank = session.groups(state).find(([label]) => label === 'Rank');
+  assert.equal(heroGroup(state, 3)[1].heroId, 15, 'cycle 3 returns to the start');
+  assert.equal(heroGroup(state, 97)[1].heroId, heroGroup(state, 1)[1].heroId);
+});
+
+test('the qualifier says why this hero is on screen', () => {
+  const state = doc();
+  assert.equal(heroGroup(state, 0)[2], 'last played');
+  assert.equal(heroGroup(state, 1)[2], '12 matches');
+  assert.equal(heroGroup(state, 2)[2], '1 match', 'singular, not "1 matches"');
+
+  state.operator.heroId = 7;
+  assert.equal(heroGroup(state, 0)[2], 'playing now');
+  assert.equal(heroGroup(state, 0)[1].heroId, 7, 'a live hero beats the pool');
+});
+
+test('an empty pool yields a placeholder rather than throwing', () => {
+  // A brand-new account, or one whose history fetch failed.
+  const state = doc();
+  state.operator.heroPool = [];
+  const hero = heroGroup(state, 4);
+  assert.equal(hero[1].heroId, null);
+  assert.equal(hero[2], '', 'no qualifier to offer');
+});
+
+test('the Today turn shows the operator rank, not a session field', () => {
+  const state = doc();
+  const today = TURNS.find(t => t.spine === 'Today');
+  const rank = today.groups(state).find(([label]) => label === 'Rank');
   assert.equal(rank[1], 'ARCHON II');
   assert.equal(rank[2], '+6', 'per-match movement stays as the qualifier');
 });

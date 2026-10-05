@@ -30,7 +30,10 @@ space.
 Gameplay shows through a fully transparent area. The right rail carries an
 optional facecam above **Twitch chat**, rendered in Deadlock's own type (see
 *Twitch chat* below). The chiron along the bottom rolls through four themed
-turns, all of them about the streamer rather than the match. A layered Deadlock
+turns, all of them about the streamer rather than the match: **Today**,
+**Hero** and **Averages**, with no stat appearing twice. The Hero turn steps
+through a pool of six — the hero last played, then the most played — so it says
+something new each time it comes round. A layered Deadlock
 mark sits in the chiron's left bay and turns one notch on each chiron turn.
 
 **Two transitions.** A logo *sweep* (1.1s) marks a match starting — it occludes
@@ -54,7 +57,7 @@ match end, when you are on a scoreboard anyway.
 ### 1. Get the code running
 
 ```bash
-npm test          # 164 tests, no install step needed
+npm test          # 168 tests, no install step needed
 npm run serve     # starts the proxy on http://localhost:7331
 ```
 
@@ -225,7 +228,7 @@ ranking, which would otherwise be dead without a configured account.
 npm test
 ```
 
-164 tests across 22 files, run by `node --test`. The quoted glob in the script
+168 tests across 22 files, run by `node --test`. The quoted glob in the script
 is required — a bare directory argument is broken on Node 24 for Windows.
 
 Two suites are worth knowing about:

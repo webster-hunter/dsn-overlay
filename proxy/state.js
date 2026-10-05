@@ -12,7 +12,7 @@ const EMPTY_DERIVED = {
   streak: { kind: null, n: 0 },
   averages: { kd: 0, netWorth: 0, lastHits: 0, denies: 0, matchLen: 0 },
   matches: 0,
-  lastHero: null
+  heroPool: []
 };
 
 function indexBy(rows, key) {
@@ -25,6 +25,13 @@ function indexBy(rows, key) {
 }
 
 const k = n => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(Math.round(n)));
+
+/** Seconds as m:ss. A match length of 1,812s reads as 30:12, not as 1812. */
+const clock = secs => {
+  const n = Math.round(secs ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return '-';
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`;
+};
 
 function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal') {
   const prof = steamById.get(p.account_id);
@@ -43,10 +50,10 @@ function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal')
     name: prof?.personaname?.trim() || PLACEHOLDER_NAME,
     heroId: p.hero_id ?? null,
     // Kept separate from heroId rather than folded into it: one is the hero
-    // being played right now, the other the last one played at all. The chiron
-    // prefers the live value and falls back, but the document does not lie
-    // about which it has.
-    lastHero: all.lastHero ?? null,
+    // being played right now, the pool is who they play. The chiron prefers
+    // the live value and rotates the pool otherwise, and the document does not
+    // blur which it has.
+    heroPool: all.heroPool ?? [],
     isSelf: operatorId > 0 && p.account_id === operatorId,
     form: d.form,
     season: d.season.text,
@@ -64,6 +71,7 @@ function playerRow(p, steamById, rankById, derived, operatorId, mode = 'normal')
     netWorth: k(d.averages.netWorth),
     lastHits: String(Math.round(d.averages.lastHits)),
     denies: mode === 'brawl' ? '-' : String(Math.round(d.averages.denies)),
+    matchLen: clock(d.averages.matchLen),
     matches: String(d.matches),
     mode
   };

@@ -243,22 +243,47 @@ export function lastPlayedMode(entries) {
 }
 
 /**
- * Which hero the player most recently picked, by id.
+ * The heroes worth showing, as [{ heroId, matches, last }].
  *
- * The chiron shows a hero icon, and `hero_id` on the state document only has a
- * value during a match — which, with no live roster available, is almost never.
- * Without this the Hero turn would sit on a dash permanently. Mode-agnostic on
- * purpose: the last hero you played is the last hero you played, whichever
- * queue it was in.
+ * The chiron's Hero turn rotates through these, one per cycle, so the turn says
+ * something new each time it comes round instead of holding one icon all
+ * stream. The last-played hero is first and flagged; the rest are the most
+ * played, by count.
+ *
+ * Six of them. At three turns on a 9s hold, the Hero turn comes round every
+ * 27s, so a full pass through the pool takes about two and a half minutes —
+ * long enough to be variety rather than a flicker, short enough that a viewer
+ * who joins mid-stream sees most of it.
+ *
+ * It has to come from history because `hero_id` on the state document only has
+ * a value during a match, and with no live roster that is almost never — a
+ * single-hero version of this sat on a dash permanently between games.
+ *
+ * Mode-agnostic on purpose: the heroes you play are the heroes you play,
+ * whichever queue they were in.
  */
-export function lastHero(entries) {
-  let best = null;
+export function heroPool(entries, limit = 6) {
+  const counts = new Map();
+  let newest = null;
   for (const en of entries ?? []) {
     if (!isCountable(en) && !isBrawl(en)) continue;
-    if (!Number.isInteger(en.hero_id)) continue;
-    if (!best || (en.start_time ?? 0) > (best.start_time ?? 0)) best = en;
+    if (!Number.isInteger(en.hero_id) || en.hero_id <= 0) continue;
+    counts.set(en.hero_id, (counts.get(en.hero_id) ?? 0) + 1);
+    if (!newest || (en.start_time ?? 0) > (newest.start_time ?? 0)) newest = en;
   }
-  return best ? best.hero_id : null;
+  if (!counts.size) return [];
+
+  // Ties broken by id so the order is stable across refreshes — a pool that
+  // reshuffles every poll would make the rotation look random.
+  const ranked = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])
+    .map(([heroId, matches]) => ({ heroId, matches, last: false }));
+
+  const lastId = newest?.hero_id ?? null;
+  const first = ranked.find(h => h.heroId === lastId);
+  if (!first) return ranked.slice(0, limit);
+  // The last-played hero leads, whether or not it is also the most played.
+  return [{ ...first, last: true }, ...ranked.filter(h => h !== first)].slice(0, limit);
 }
 
 /**
@@ -271,6 +296,6 @@ export function derivePlayer(entries) {
     ...deriveMode(entries, isCountable),
     brawl: deriveMode(entries, isBrawl),
     lastMode: lastPlayedMode(entries),
-    lastHero: lastHero(entries)
+    heroPool: heroPool(entries)
   };
 }
